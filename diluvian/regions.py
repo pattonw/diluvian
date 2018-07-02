@@ -674,8 +674,8 @@ class Region(object):
                 lines['bt'][plane].set_ydata(get_hv(vox + margin, plane)['h'])
 
             return changed_images + \
-                lines['h'].values() + lines['v'].values() + \
-                lines['bl'].values() + lines['bt'].values()
+                list(lines['h'].values()) + list(lines['v'].values()) + \
+                list(lines['bl'].values()) + list(lines['bt'].values())
 
         update_fn.moves = 0
         update_fn.next_pos_vox = current_vox
