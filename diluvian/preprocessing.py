@@ -153,9 +153,29 @@ def grid_seeds(image_data, _, grid_step_spacing=1):
 
     return seeds
 
+def skeleton_seeds(image_data, skeletonSeeds):
+    """ Create seed locations in a volume based on a given skeleton.
+    Seed locations will be evenly spaced about 1 field of view appart
+    from each other. This way we can look at the overlap between
+    generated maps. 
+
+    Parameters
+    ----------
+    image_data : ndarray
+    skeleton_seeds : full list of seeds
+
+    Returns
+    ----------
+    list of seeds in image_data
+    """
+    
+    return skeletonSeeds
+
+
 
 # Note that these must be added separately to the CLI.
 SEED_GENERATORS = {
     'grid': grid_seeds,
     'sobel': intensity_distance_seeds,
+    'skeleton': skeleton_seeds,
 }

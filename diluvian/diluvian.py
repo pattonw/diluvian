@@ -418,7 +418,7 @@ def fill_region_with_model(
     if bounds_input_file is not None:
         gen_kwargs = {
                 k: {'bounds_generator': iter(SubvolumeBounds.iterable_from_csv(bounds_input_file.format(volume=k)))}
-                for k in volumes.iterkeys()}
+                for k in volumes.keys()}
     else:
         if moves is None:
             moves = 5
@@ -429,11 +429,11 @@ def fill_region_with_model(
         if sparse:
             gen_kwargs = {
                     k: {'sparse_margin': subv_shape}
-                    for k in volumes.iterkeys()}
+                    for k in volumes.keys()}
         else:
             gen_kwargs = {
                     k: {'shape': subv_shape}
-                    for k in volumes.iterkeys()}
+                    for k in volumes.keys()}
     subvolumes = [
             v.downsample(CONFIG.volume.resolution)
              .subvolume_generator(**gen_kwargs[k])

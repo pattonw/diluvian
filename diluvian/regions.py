@@ -80,8 +80,8 @@ class Region(object):
 
     @staticmethod
     def from_subvolume_generator(subvolumes, **kwargs):
-        subvolumes = itertools.ifilter(lambda s: s.has_uniform_seed_margin(), subvolumes)
-        return itertools.imap(lambda v: Region.from_subvolume(v, **kwargs), subvolumes)
+        subvolumes = filter(lambda s: s.has_uniform_seed_margin(), subvolumes)
+        return list(map(lambda v: Region.from_subvolume(v, **kwargs), subvolumes))
 
     def __init__(self, image, target=None, seed_vox=None, mask=None, sparse_mask=False, block_padding=None):
         self.block_padding = block_padding
@@ -667,7 +667,7 @@ class Region(object):
                     changed_images.append(im)
             images['last'] = vox_round
 
-            for plane in axes.iterkeys():
+            for plane in axes.keys():
                 lines['h'][plane].set_ydata(get_hv(vox - margin, plane)['h'])
                 lines['v'][plane].set_xdata(get_hv(vox + margin, plane)['v'])
                 lines['bl'][plane].set_xdata(get_hv(vox - margin, plane)['v'])
