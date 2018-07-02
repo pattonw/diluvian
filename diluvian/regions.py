@@ -69,7 +69,7 @@ class Region(object):
 
     @staticmethod
     def from_subvolume(subvolume, **kwargs):
-        if subvolume.label_mask is not None and np.issubdtype(subvolume.label_mask.dtype, np.bool):
+        if subvolume.label_mask is not None and np.issubdtype(subvolume.label_mask.dtype, np.bool_):
             target = mask_to_output_target(subvolume.label_mask)
         else:
             target = subvolume.label_mask
@@ -81,7 +81,7 @@ class Region(object):
     @staticmethod
     def from_subvolume_generator(subvolumes, **kwargs):
         subvolumes = filter(lambda s: s.has_uniform_seed_margin(), subvolumes)
-        return list(map(lambda v: Region.from_subvolume(v, **kwargs), subvolumes))
+        return map(lambda v: Region.from_subvolume(v, **kwargs), subvolumes)
 
     def __init__(self, image, target=None, seed_vox=None, mask=None, sparse_mask=False, block_padding=None):
         self.block_padding = block_padding
