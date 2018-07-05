@@ -79,7 +79,7 @@ def get_skeleton_bounds(filename, volumes, num_bounds, sparse=False, moves=None)
     return subvolume_bounds
 
 def seeds_from_skeleton(filename):
-    return([[50,150,150],[60,160,160]])
+    return([[50,600,600],[51,604,604]])
 
 
 def fill_volume_with_model(
@@ -560,10 +560,6 @@ def fill_skeleton_with_model(
 
     subvolume_bounds = get_skeleton_bounds(skeleton_file, volumes, num_bounds = 2, moves=0)
 
-    #for k in subvolume_bounds.keys():
-    #    for bound in subvolume_bounds[k]:
-    #        print("SUBVOLUME BOUNDS:: start: " + str(bound.start) + " stop: " + str(bound.stop) + " seed: " + str(bound.seed))
-    
     gen_kwargs = {
             k: {'bounds_generator': iter(subvolume_bounds[k])}
             for k in volumes.keys()}

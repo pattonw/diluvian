@@ -76,6 +76,7 @@ class Region(object):
         return Region(subvolume.image,
                       target=target,
                       seed_vox=subvolume.seed,
+                      orig_bounds = subvolume.bounds,
                       **kwargs)
 
     @staticmethod
@@ -83,12 +84,13 @@ class Region(object):
         subvolumes = filter(lambda s: s.has_uniform_seed_margin(), subvolumes)
         return map(lambda v: Region.from_subvolume(v, **kwargs), subvolumes)
 
-    def __init__(self, image, target=None, seed_vox=None, mask=None, sparse_mask=False, block_padding=None):
+    def __init__(self, image, target=None, seed_vox=None, orig_bounds=None, mask=None, sparse_mask=False, block_padding=None):
         self.block_padding = block_padding
         self.MOVE_DELTA = CONFIG.model.move_step
         self.queue = queue.PriorityQueue()
         self.visited = set()
         self.image = image
+        self.orig_bounds = orig_bounds
         self.bounds = np.array(image.shape, dtype=np.int64)
         if seed_vox is None:
             self.MOVE_GRID_OFFSET = np.array([0, 0, 0], dtype=np.int64)

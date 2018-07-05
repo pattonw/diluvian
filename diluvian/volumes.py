@@ -111,14 +111,16 @@ class SubvolumeBounds(object):
 
 class Subvolume(object):
     """A subvolume of image data and an optional ground truth object mask."""
-    __slots__ = ('image', 'label_mask', 'seed', 'label_id',)
+    __slots__ = ('image', 'label_mask', 'seed', 'label_id','bounds',)
 
-    def __init__(self, image, label_mask, seed, label_id):
+    def __init__(self, image, label_mask, seed, label_id, bounds):
         self.image = image
         self.label_mask = label_mask
         self.seed = seed
         self.label_id = label_id
+        self.bounds = bounds
 
+        
     def f_a(self):
         """Calculate the mask filling fraction of this subvolume.
 
@@ -727,7 +729,7 @@ class Volume(object):
             label_mask = None
             label_id = None
 
-        return Subvolume(image_subvol, label_mask, seed, label_id)
+        return Subvolume(image_subvol, label_mask, seed, label_id, bounds)
 
     class SubvolumeBoundsGenerator(six.Iterator):
         def __init__(self, volume, shape, label_margin=None, seeds=None):
@@ -773,7 +775,7 @@ class Volume(object):
                     ctr = np.array([self.random.randint(self.ctr_min[n], self.ctr_max[n])
                                     for n in range(3)]).astype(np.int64)
                 else:
-                    ctr = next(self.seeds)
+                    ctr = self.volume.local_coord_to_world(next(self.seeds))
                 start = ctr - self.margin
                 stop = ctr + self.margin + np.mod(self.shape, 2).astype(np.int64)
 
@@ -983,6 +985,11 @@ class DownsampledVolume(VolumeView):
         # sense, just a rescaling of the coordinate in the subvolume-local
         # coordinates. Hence no similar call in VolumeView.get_subvolume.
         subvol.seed = self.parent_coord_to_world(subvol.seed)
+
+        orig_bounds = subvol.bounds
+        orig_bounds.start = orig_bounds.start // self.scale
+        orig_bounds.stop = orig_bounds.stop // self.scale
+        subvol.bounds = orig_bounds
 
         return subvol
 
