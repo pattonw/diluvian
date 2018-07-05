@@ -34,6 +34,7 @@ from .volumes import (
         SubvolumeBounds,
         )
 from .regions import Region
+from .skeletons import Skeleton
 
 
 def generate_subvolume_bounds(filename, volumes, num_bounds, sparse=False, moves=None):
@@ -55,6 +56,30 @@ def generate_subvolume_bounds(filename, volumes, num_bounds, sparse=False, moves
                   .subvolume_bounds_generator(**gen_kwargs)
         bounds = itertools.islice(bounds, num_bounds)
         SubvolumeBounds.iterable_to_csv(bounds, filename.format(volume=k))
+
+
+def get_skeleton_bounds(filename, volumes, num_bounds, sparse=False, moves=None):
+    seeds = seeds_from_skeleton(filename)
+    if moves is None:
+        moves = 5
+    else:
+        moves = np.asarray(moves)
+    subv_shape = CONFIG.model.input_fov_shape + CONFIG.model.move_step * 2 * moves
+
+    if sparse:
+        gen_kwargs = {'sparse_margin': subv_shape}
+    else:
+        gen_kwargs = {'shape': subv_shape, 'seeds': seeds}
+    subvolume_bounds = {}
+    for k, v in six.iteritems(volumes):
+        bounds = v.downsample(CONFIG.volume.resolution)\
+                  .subvolume_bounds_generator(**gen_kwargs)
+        bounds = itertools.islice(bounds, num_bounds)
+        subvolume_bounds[k] = bounds
+    return subvolume_bounds
+
+def seeds_from_skeleton(filename):
+    return([[50,150,150],[60,160,160]])
 
 
 def fill_volume_with_model(
@@ -501,6 +526,107 @@ def fill_region_with_model(
                 viewer.open_in_browser()
             else:
                 break
+
+
+def fill_skeleton_with_model(
+        model_file,
+        skeleton_file,
+        volumes=None,
+        partition=False,
+        augment=False,
+        bounds_input_file=None,
+        bias=True,
+        move_batch_size=1,
+        max_moves=None,
+        remask_interval=None,
+        sparse=False,
+        moves=None):
+    # Late import to avoid Keras import until TF bindings are set.
+    from .network import load_model
+
+    if volumes is None:
+        raise ValueError('Volumes must be provided.')
+
+    """
+    Generate regions to fill:
+
+    Each region should be a small area around a point on the skeleton.
+    After flood filling all regions, I will look for intersections or the
+    lack thereof that will indicate false mergers, allong with heavy
+    segmentation perpendicular to skeleton that may indicate missing
+    branches.
+
+    """
+
+    subvolume_bounds = get_skeleton_bounds(skeleton_file, volumes, num_bounds = 2, moves=0)
+
+    #for k in subvolume_bounds.keys():
+    #    for bound in subvolume_bounds[k]:
+    #        print("SUBVOLUME BOUNDS:: start: " + str(bound.start) + " stop: " + str(bound.stop) + " seed: " + str(bound.seed))
+    
+    gen_kwargs = {
+            k: {'bounds_generator': iter(subvolume_bounds[k])}
+            for k in volumes.keys()}
+
+    subvolumes = [
+            v.downsample(CONFIG.volume.resolution)
+             .subvolume_generator(**gen_kwargs[k])
+            for k, v in six.iteritems(volumes)]
+
+
+    skeleton = Roundrobin(*[Region.from_subvolume_generator(v, block_padding='reflect') for v in subvolumes])
+
+    # load the model as usual.
+    model = load_model(model_file, CONFIG.network)
+
+    regions = []
+    for region in skeleton:
+        region.bias_against_merge = bias
+        try:
+            six.next(region.fill(
+                    model,
+                    progress=True,
+                    move_batch_size=move_batch_size,
+                    max_moves=max_moves,
+                    remask_interval=remask_interval))
+        except (StopIteration, Region.EarlyFillTermination):
+            pass
+        body = region.to_body()
+        viewer = region.get_viewer()
+        try:
+            mask, bounds = body.get_seeded_component(CONFIG.postprocessing.closing_shape)
+            viewer.add(mask.astype(np.float32),
+                       name='Body Mask',
+                       offset=bounds[0],
+                       shader=get_color_shader(2))
+        except ValueError:
+            logging.info('Seed not in body.')
+        regions.append(region)
+    skel = Skeleton(regions)
+    while True:
+        s = raw_input('Press Enter to continue, '
+                        'r to 3D render body, '
+                        'q to quit...')
+        if s == 'q':
+            return
+        elif s == 'r':
+            skel.render_skeleton()
+        elif s == 'ra':
+            for region in regions:
+                region_copy = region.unfilled_copy()
+                region_copy.fill_render(
+                        model,
+                        progress=True,
+                        move_batch_size=move_batch_size,
+                        max_moves=max_moves,
+                        remask_interval=remask_interval)
+        else:
+            break
+
+    # I will want to view the results for the full skeleton, not individual sections of it
+    while True:
+        print("Visualizations to be implemented")
+        break
 
 
 def evaluate_volume(

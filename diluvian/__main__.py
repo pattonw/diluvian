@@ -215,12 +215,11 @@ def _make_main_parser():
             'num_bounds', default=None, type=int,
             help='Number of bounds to generate.')
 
-
-    validate_skeleton_parser = commandparsers.add_parser(
-            'validate-skeleton', parents=[common_parser],
+    skeleton_fill_parser = commandparsers.add_parser(
+            'skeleton-fill', parents=[common_parser, fill_common_parser, bounds_common_parser],
             help='Seed periodically allong skeleton to look for false merges and missed branches.')
-    validate_skeleton_parser.add_argument(
-            '-sk', '--skeleton-file', dest='skeleton_file', default=None,
+    skeleton_fill_parser.add_argument(
+            'skeleton_file', default=None,
             help='File containing the skeleton for validation. Currently supports JSON file types.')
 
     return parser
@@ -366,30 +365,23 @@ def main():
                                   args.num_bounds,
                                   moves=args.bounds_num_moves)
 
-    elif args.command == 'validate-skeleton':
+    elif args.command == 'skeleton-fill':
         print("validating skeleton")
 
         # Late import to prevent loading large modules for short CLI commands.
         init_seeds()
-        from .diluvian import fill_skeleton
+        from .diluvian import fill_skeleton_with_model
 
         volumes = load_volumes(args.volume_files, args.in_memory)
-        fill_skeleton(args.model_file,
-                        volumes,
-                        args.segmentation_output_file,
-                        resume_filename=args.resume_filename,
-                        partition=args.partition_volumes,
-                        viewer=args.viewer,
-                        seed_generator=args.seed_generator,
-                        background_label_id=args.background_label_id,
-                        bias=args.bias,
-                        move_batch_size=args.move_batch_size,
-                        max_moves=0,
-                        max_bodies=args.max_bodies,
-                        filter_seeds_by_mask=not args.ignore_mask,
-                        reject_early_termination=args.reject_early_termination,
-                        remask_interval=args.remask_interval,
-                        shuffle_seeds=args.shuffle_seeds)
+        fill_skeleton_with_model(args.model_file,
+                                args.skeleton_file,
+                                volumes=volumes,
+                                partition=args.partition_volumes,
+                                bias=args.bias,
+                                move_batch_size=args.move_batch_size,
+                                max_moves=args.max_moves,
+                                remask_interval=args.remask_interval,
+                                moves=args.bounds_num_moves)
 
 
 

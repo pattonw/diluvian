@@ -681,8 +681,8 @@ class Volume(object):
     def sparse_wrapper(self, *args):
         return SparseWrappedVolume(self, *args)
 
-    def subvolume_bounds_generator(self, shape=None, label_margin=None):
-        return self.SubvolumeBoundsGenerator(self, shape, label_margin)
+    def subvolume_bounds_generator(self, shape=None, label_margin=None, seeds=None):
+        return self.SubvolumeBoundsGenerator(self, shape, label_margin, seeds)
 
     def subvolume_generator(self, bounds_generator=None, **kwargs):
         if bounds_generator is None:
@@ -730,7 +730,7 @@ class Volume(object):
         return Subvolume(image_subvol, label_mask, seed, label_id)
 
     class SubvolumeBoundsGenerator(six.Iterator):
-        def __init__(self, volume, shape, label_margin=None):
+        def __init__(self, volume, shape, label_margin=None, seeds=None):
             self.volume = volume
             self.shape = shape
             self.margin = np.floor_divide(self.shape, 2).astype(np.int64)
@@ -741,6 +741,10 @@ class Volume(object):
             self.ctr_min = self.margin
             self.ctr_max = (np.array(self.volume.shape) - self.margin - 1).astype(np.int64)
             self.random = np.random.RandomState(CONFIG.random_seed)
+            if seeds:
+                self.seeds=iter(seeds)
+            else:
+                self.seeds = None
 
             # If the volume has a mask channel, further limit ctr_min and
             # ctr_max to lie inside a margin in the AABB of the mask.
@@ -765,8 +769,11 @@ class Volume(object):
 
         def __next__(self):
             while True:
-                ctr = np.array([self.random.randint(self.ctr_min[n], self.ctr_max[n])
-                                for n in range(3)]).astype(np.int64)
+                if not self.seeds:
+                    ctr = np.array([self.random.randint(self.ctr_min[n], self.ctr_max[n])
+                                    for n in range(3)]).astype(np.int64)
+                else:
+                    ctr = next(self.seeds)
                 start = ctr - self.margin
                 stop = ctr + self.margin + np.mod(self.shape, 2).astype(np.int64)
 
