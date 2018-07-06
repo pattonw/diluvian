@@ -79,7 +79,14 @@ def get_skeleton_bounds(filename, volumes, num_bounds, sparse=False, moves=None)
     return subvolume_bounds
 
 def seeds_from_skeleton(filename):
-    return([[50,600,600],[51,604,604]])
+    import csv
+    rows = []
+    with open(filename, newline='') as csvfile:
+        reader = csv.reader(csvfile, delimiter=',', quotechar='|')
+        for row in reader:
+            rows.append([int(x) for x in row])
+    print(rows)
+    return rows
 
 
 def fill_volume_with_model(
@@ -558,17 +565,16 @@ def fill_skeleton_with_model(
 
     """
 
-    subvolume_bounds = get_skeleton_bounds(skeleton_file, volumes, num_bounds = 2, moves=0)
+    subvolume_bounds = get_skeleton_bounds(skeleton_file, volumes, num_bounds = 4, moves=0)
 
     gen_kwargs = {
             k: {'bounds_generator': iter(subvolume_bounds[k])}
-            for k in volumes.keys()}
+            for k in volumes.keys()}        
 
     subvolumes = [
             v.downsample(CONFIG.volume.resolution)
              .subvolume_generator(**gen_kwargs[k])
             for k, v in six.iteritems(volumes)]
-
 
     skeleton = Roundrobin(*[Region.from_subvolume_generator(v, block_padding='reflect') for v in subvolumes])
 
