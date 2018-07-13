@@ -64,7 +64,7 @@ def get_skeleton_bounds(filename, volumes, num_bounds, sparse=False, moves=None)
         moves = 5
     else:
         moves = np.asarray(moves)
-    subv_shape = CONFIG.model.input_fov_shape + CONFIG.model.move_step * 2 * moves
+    subv_shape = CONFIG.model.input_fov_shape + CONFIG.model.move_step * moves
 
     if sparse:
         gen_kwargs = {'sparse_margin': subv_shape}
