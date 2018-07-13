@@ -59,7 +59,7 @@ def generate_subvolume_bounds(filename, volumes, num_bounds, sparse=False, moves
 
 
 def get_skeleton_bounds(filename, volumes, num_bounds, sparse=False, moves=None):
-    seeds = seeds_from_skeleton(filename)
+    seeds, ids = seeds_from_skeleton(filename)
     if moves is None:
         moves = 5
     else:
@@ -69,7 +69,7 @@ def get_skeleton_bounds(filename, volumes, num_bounds, sparse=False, moves=None)
     if sparse:
         gen_kwargs = {'sparse_margin': subv_shape}
     else:
-        gen_kwargs = {'shape': subv_shape, 'seeds': seeds}
+        gen_kwargs = {'shape': subv_shape, 'seeds': seeds, 'ids': ids}
     subvolume_bounds = {}
     for k, v in six.iteritems(volumes):
         bounds = v.downsample(CONFIG.volume.resolution)\
@@ -80,13 +80,20 @@ def get_skeleton_bounds(filename, volumes, num_bounds, sparse=False, moves=None)
 
 def seeds_from_skeleton(filename):
     import csv
-    rows = []
+    coords = []
+    ids = []
     with open(filename, newline='') as csvfile:
         reader = csv.reader(csvfile, delimiter=',', quotechar='|')
         for row in reader:
-            rows.append([int(x) for x in row])
-    print(rows)
-    return rows
+            coords.append([int(float(x)) for x in row[2:]])
+            if row[1] == 'null' or row[1] == 'none':
+                ids.append([int(float(row[0])), None])
+                if len(ids) > 1:
+                    ids = ids[-1] + ids[:-1]
+                    coords = coords[-1] + coords[:-1]
+            else:
+                ids.append([int(float(x)) for x in row[:2]])
+    return coords[0:20], ids[0:20]
 
 
 def fill_volume_with_model(
@@ -565,7 +572,7 @@ def fill_skeleton_with_model(
 
     """
 
-    subvolume_bounds = get_skeleton_bounds(skeleton_file, volumes, num_bounds = 4, moves=0)
+    subvolume_bounds = get_skeleton_bounds(skeleton_file, volumes, num_bounds = 6, moves=0)
 
     gen_kwargs = {
             k: {'bounds_generator': iter(subvolume_bounds[k])}
@@ -582,6 +589,7 @@ def fill_skeleton_with_model(
     model = load_model(model_file, CONFIG.network)
 
     regions = []
+    skel2 = Skeleton()
     for region in skeleton:
         region.bias_against_merge = bias
         try:
@@ -593,16 +601,6 @@ def fill_skeleton_with_model(
                     remask_interval=remask_interval))
         except (StopIteration, Region.EarlyFillTermination):
             pass
-        body = region.to_body()
-        viewer = region.get_viewer()
-        try:
-            mask, bounds = body.get_seeded_component(CONFIG.postprocessing.closing_shape)
-            viewer.add(mask.astype(np.float32),
-                       name='Body Mask',
-                       offset=bounds[0],
-                       shader=get_color_shader(2))
-        except ValueError:
-            logging.info('Seed not in body.')
         regions.append(region)
     skel = Skeleton(regions)
     while True:
