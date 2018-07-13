@@ -589,7 +589,7 @@ def fill_skeleton_with_model(
     model = load_model(model_file, CONFIG.network)
 
     regions = []
-    skel2 = Skeleton()
+    skel = Skeleton()
     for region in skeleton:
         region.bias_against_merge = bias
         try:
@@ -601,8 +601,7 @@ def fill_skeleton_with_model(
                     remask_interval=remask_interval))
         except (StopIteration, Region.EarlyFillTermination):
             pass
-        regions.append(region)
-    skel = Skeleton(regions)
+        skel.add_region(region)
     while True:
         s = raw_input('Press Enter to continue, '
                         'r to 3D render body, '
