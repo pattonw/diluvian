@@ -44,6 +44,17 @@ class Skeleton(object):
     def get_masks(self):
         for node in self.tree.traverse():
             mask = np.zeros(np.array(self.stop)-np.array(self.start))
+            node_mask, _ = node.region.to_body().get_seeded_component(CONFIG.postprocessing.closing_shape)
+            bounds = node.region.orig_bounds
+            node_center = [x//2 for x in node_mask.shape]
+
+            mask[list(map(slice, np.array(bounds.start) - np.array(self.start),
+                                 np.array(bounds.stop) - np.array(self.start)))] = node_mask
+            yield mask
+
+    def get_masks_with_seeds(self):
+        for node in self.tree.traverse():
+            mask = np.zeros(np.array(self.stop)-np.array(self.start))
             seed_mask = np.zeros(np.array(self.stop)-np.array(self.start))
             node_mask, _ = node.region.to_body().get_seeded_component(CONFIG.postprocessing.closing_shape)
             bounds = node.region.orig_bounds
@@ -52,7 +63,7 @@ class Skeleton(object):
             seed_mask[tuple(np.array(bounds.start) - np.array(self.start) + np.array(node_center))] = 1
             mask[list(map(slice, np.array(bounds.start) - np.array(self.start),
                                  np.array(bounds.stop) - np.array(self.start)))] = node_mask
-            yield [mask, seed_mask]
+            yield mask, seed_mask
     
     def add_region(self, region):
         if not self.tree.add_region(self.RegionNode(region)):
@@ -87,17 +98,17 @@ class Skeleton(object):
 
         fig = mlab.figure(size=(1280, 720))
 
-        for mask in self.get_masks():
-            grid = mlab.pipeline.scalar_field(mask[0])
+        for mask, seed_mask in self.get_masks_with_seeds():
+            grid = mlab.pipeline.scalar_field(mask)
             grid.spacing = CONFIG.volume.resolution
-            center_grid = mlab.pipeline.scalar_field(mask[1])
-            center_grid.spacing = CONFIG.volume.resolution
+            seed_grid = mlab.pipeline.scalar_field(seed_mask)
+            seed_grid.spacing = CONFIG.volume.resolution
 
             colors = (random.random(), random.random(), random.random())
             mlab.pipeline.iso_surface(grid, color=colors,
                                             contours=[0.5], 
                                             opacity=0.1)
-            mlab.pipeline.iso_surface(center_grid, color=colors,
+            mlab.pipeline.iso_surface(seed_grid, color=colors,
                                             contours=[0.5], 
                                             opacity=1)
 
@@ -128,7 +139,7 @@ class Skeleton(object):
                 self.root = node
                 return True
             elif self.root.is_child(node):
-                node.append_child(root)
+                node.append_child(self.root)
                 self.root = node
                 return True
             else:
