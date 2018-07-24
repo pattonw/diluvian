@@ -572,7 +572,7 @@ def fill_skeleton_with_model(
 
     """
 
-    subvolume_bounds = get_skeleton_bounds(skeleton_file, volumes, num_bounds = 6, moves=0)
+    subvolume_bounds = get_skeleton_bounds(skeleton_file, volumes, num_bounds = 1, moves=0)
 
     gen_kwargs = {
             k: {'bounds_generator': iter(subvolume_bounds[k])}

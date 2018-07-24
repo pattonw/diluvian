@@ -66,3 +66,6 @@ target/
 
 # vim
 *.swp
+.vscode/.ropeproject/objectdb
+run_working_image.sh
+run_image_stack.sh

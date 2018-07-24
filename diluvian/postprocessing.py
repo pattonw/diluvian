@@ -66,7 +66,7 @@ class Body(object):
         label_im, _ = ndimage.label(mask)
         seed_label = label_im[tuple(self.seed - bounds[0])]
         if seed_label == 0:
-            raise ValueError('Seed voxel (%s) is not in body.', np.array_str(self.seed))
+            raise ValueError('Seed voxel (%s) is not in body.'%(np.array_str(self.seed)))
         label_im[label_im != seed_label] = 0
         label_im[label_im == seed_label] = 1
 

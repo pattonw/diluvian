@@ -23,6 +23,7 @@ from six.moves import range as xrange
 from .config import CONFIG
 from .octrees import OctreeVolume
 from .util import get_nonzero_aabb
+import catpy
 
 
 DimOrder = namedtuple('DimOrder', ('X', 'Y', 'Z'))
@@ -770,62 +771,63 @@ class Volume(object):
                                  np.array_str(self.ctr_min), np.array_str(self.ctr_max), np.array_str(self.shape)))
 
         def __iter__(self):
-            return self
+            while True:
+                while True:
+                    if not self.seeds:
+                        ctr = np.array([self.random.randint(self.ctr_min[n], self.ctr_max[n])
+                                        for n in range(3)]).astype(np.int64)
+                    else:
+                        ctr = self.volume.local_coord_to_world(next(self.seeds))
+                        print(ctr)
+                        print(self.volume.world_coord_to_local(ctr))
+                    start = ctr - self.margin
+                    stop = ctr + self.margin + np.mod(self.shape, 2).astype(np.int64)
+
+                    node_id = None
+                    if self.ids:
+                        node_id = next(self.ids)
+
+                    # If the volume has a mask channel, only accept subvolumes
+                    # entirely contained in it.
+                    if self.volume.mask_data is not None:
+                        start_local = self.volume.world_coord_to_local(start + self.label_margin)
+                        stop_local = self.volume.world_coord_to_local(stop - self.label_margin)
+                        mask = self.volume.mask_data[
+                                start_local[0]:stop_local[0],
+                                start_local[1]:stop_local[1],
+                                start_local[2]:stop_local[2]]
+                        if not mask.all():
+                            logging.debug('Skipping subvolume not entirely in mask.')
+                            continue
+
+                    # Skip subvolumes with seeds in blank sections.
+                    if self.skip_blank_sections and self.volume.image_data is not None:
+                        if self.volume.image_data[tuple(self.volume.world_coord_to_local(ctr))] == 0:
+                            print([x.data.shape for x in self.volume.image_data.iter_leaves()])
+                            logging.debug('Skipping subvolume with seed in blank section.')
+                            continue
+
+                    # Only accept subvolumes where the central seed voxel will be
+                    # of a uniform label after downsampling. For more stringent
+                    # seed region uniformity filtering, see has_uniform_seed_margin.
+                    if self.volume.label_data is None:
+                        label_id = None
+                        break
+                    seed_min = self.volume.world_coord_to_local(ctr)
+                    seed_max = self.volume.world_coord_to_local(ctr + 1)
+                    label_ids = self.volume.label_data[
+                            seed_min[0]:seed_max[0],
+                            seed_min[1]:seed_max[1],
+                            seed_min[2]:seed_max[2]]
+                    if (label_ids == label_ids.item(0)).all():
+                        label_id = label_ids.item(0)
+                        break
+
+
+                yield SubvolumeBounds(start, stop, label_id=label_id, label_margin=self.label_margin, node_id=node_id)
 
         def reset(self):
             self.random.seed(0)
-
-        def __next__(self):
-            while True:
-                if not self.seeds:
-                    ctr = np.array([self.random.randint(self.ctr_min[n], self.ctr_max[n])
-                                    for n in range(3)]).astype(np.int64)
-                else:
-                    ctr = self.volume.local_coord_to_world(next(self.seeds))
-                start = ctr - self.margin
-                stop = ctr + self.margin + np.mod(self.shape, 2).astype(np.int64)
-
-                node_id = None
-                if self.ids:
-                    node_id = next(self.ids)
-
-                # If the volume has a mask channel, only accept subvolumes
-                # entirely contained in it.
-                if self.volume.mask_data is not None:
-                    start_local = self.volume.world_coord_to_local(start + self.label_margin)
-                    stop_local = self.volume.world_coord_to_local(stop - self.label_margin)
-                    mask = self.volume.mask_data[
-                            start_local[0]:stop_local[0],
-                            start_local[1]:stop_local[1],
-                            start_local[2]:stop_local[2]]
-                    if not mask.all():
-                        logging.debug('Skipping subvolume not entirely in mask.')
-                        continue
-
-                # Skip subvolumes with seeds in blank sections.
-                if self.skip_blank_sections and self.volume.image_data is not None:
-                    if self.volume.image_data[tuple(self.volume.world_coord_to_local(ctr))] == 0:
-                        logging.debug('Skipping subvolume with seed in blank section.')
-                        continue
-
-                # Only accept subvolumes where the central seed voxel will be
-                # of a uniform label after downsampling. For more stringent
-                # seed region uniformity filtering, see has_uniform_seed_margin.
-                if self.volume.label_data is None:
-                    label_id = None
-                    break
-                seed_min = self.volume.world_coord_to_local(ctr)
-                seed_max = self.volume.world_coord_to_local(ctr + 1)
-                label_ids = self.volume.label_data[
-                        seed_min[0]:seed_max[0],
-                        seed_min[1]:seed_max[1],
-                        seed_min[2]:seed_max[2]]
-                if (label_ids == label_ids.item(0)).all():
-                    label_id = label_ids.item(0)
-                    break
-
-
-            return SubvolumeBounds(start, stop, label_id=label_id, label_margin=self.label_margin, node_id=node_id)
 
 
 class NdarrayVolume(Volume):
@@ -847,17 +849,17 @@ class VolumeView(Volume):
         super(VolumeView, self).__init__(*args, **kwargs)
         self.parent = parent
 
-    def parent_coord_to_world(self, a):
+    def parent_coord_to_local(self, a):
         return a
 
     def local_coord_to_world(self, a):
-        return self.parent.local_coord_to_world(self.parent_coord_to_world(a))
+        return self.parent.local_coord_to_world(self.parent_coord_to_local(a))
 
-    def world_coord_to_parent(self, a):
+    def local_coord_to_parent(self, a):
         return a
 
     def world_coord_to_local(self, a):
-        return self.world_coord_to_parent(self.parent.world_coord_to_local(a))
+        return self.local_coord_to_parent(self.parent.world_coord_to_local(a))
 
     def world_mat_to_local(self, m):
         return self.parent.world_mat_to_local(m)
@@ -871,9 +873,9 @@ class VolumeView(Volume):
         return self.parent.shape
 
     def get_subvolume(self, bounds):
-        parent_start = self.world_coord_to_parent(bounds.start) if bounds.start is not None else None
-        parent_stop = self.world_coord_to_parent(bounds.stop) if bounds.stop is not None else None
-        parent_seed = self.world_coord_to_parent(bounds.seed) if bounds.seed is not None else None
+        parent_start = self.local_coord_to_parent(bounds.start) if bounds.start is not None else None
+        parent_stop = self.local_coord_to_parent(bounds.stop) if bounds.stop is not None else None
+        parent_seed = self.local_coord_to_parent(bounds.seed) if bounds.seed is not None else None
         parent_bounds = SubvolumeBounds(start=parent_start,
                                         stop=parent_stop,
                                         seed=parent_seed,
@@ -911,10 +913,10 @@ class PartitionedVolume(VolumeView):
         self.bounds = ((np.multiply(partition_shape, self.partition_index)).astype(np.int64),
                        (np.multiply(partition_shape, self.partition_index + 1)).astype(np.int64))
 
-    def parent_coord_to_world(self, a):
+    def parent_coord_to_local(self, a):
         return a - self.bounds[0]
 
-    def world_coord_to_parent(self, a):
+    def local_coord_to_parent(self, a):
         return a + self.bounds[0]
 
     @property
@@ -953,10 +955,10 @@ class DownsampledVolume(VolumeView):
                 label_data=parent.label_data,
                 mask_data=parent.mask_data)
 
-    def parent_coord_to_world(self, a):
+    def parent_coord_to_local(self, a):
         return np.floor_divide(a, self.scale)
 
-    def world_coord_to_parent(self, a):
+    def local_coord_to_parent(self, a):
         return np.multiply(a, self.scale)
 
     @property
@@ -964,12 +966,14 @@ class DownsampledVolume(VolumeView):
         return tuple(np.floor_divide(np.array(self.parent.shape), self.scale))
 
     def get_subvolume(self, bounds):
+        print(bounds.start, bounds.stop)
         subvol_shape = bounds.stop - bounds.start
         label_shape = subvol_shape - 2 * bounds.label_margin
-        parent_bounds = SubvolumeBounds(self.world_coord_to_parent(bounds.start),
-                                        self.world_coord_to_parent(bounds.stop),
-                                        label_margin=self.world_coord_to_parent(bounds.label_margin),
+        parent_bounds = SubvolumeBounds(self.local_coord_to_parent(bounds.start),
+                                        self.local_coord_to_parent(bounds.stop),
+                                        label_margin=self.local_coord_to_parent(bounds.label_margin),
                                         node_id = bounds.node_id)
+        print(parent_bounds.start, parent_bounds.stop)
         subvol = self.parent.get_subvolume(parent_bounds)
         subvol.image = subvol.image.reshape(
                 [subvol_shape[0], self.scale[0],
@@ -996,7 +1000,7 @@ class DownsampledVolume(VolumeView):
         # Note that this is not a coordinate xform to parent in the typical
         # sense, just a rescaling of the coordinate in the subvolume-local
         # coordinates. Hence no similar call in VolumeView.get_subvolume.
-        subvol.seed = self.parent_coord_to_world(subvol.seed)
+        subvol.seed = self.parent_coord_to_local(subvol.seed)
 
         orig_bounds = subvol.bounds
         orig_bounds.start = orig_bounds.start // self.scale
@@ -1192,6 +1196,21 @@ class ImageStackVolume(Volume):
         return ImageStackVolume(bounds, resolution, tile_width, tile_height, format_url,
                                 missing_z=stack_info['broken_slices'])
 
+    def from_toml(filename):
+        from keras.utils.data_utils import get_file
+
+        volumes = {}
+        with open(filename, 'rb') as fin:
+            datasets = toml.load(fin).get('ImageStack', [])
+            for dataset in datasets:
+                si = {'dimensions':'bounds', 'resolution':'resolution','tile_width':'tile_width','tile_height':'tile_height','broken_slices':'broken_slices'}
+                tsp = {'image_base':'source_base_url','file_extension':'file_extension','tile_width':'tile_width','tile_height':'tile_height',"tile_source_type":"tile_source_type"}
+                volume = ImageStackVolume.from_catmaid_stack({si[key]:dataset[key] for key in si}, {tsp[key]:dataset[key] for key in tsp})
+                volumes[dataset['title']] = volume
+
+        return volumes
+
+
     def __init__(self, bounds, orig_resolution, tile_width, tile_height, tile_format_url,
                  zoom_level=0, missing_z=None, image_leaf_shape=None):
         self.orig_bounds = bounds
@@ -1199,6 +1218,7 @@ class ImageStackVolume(Volume):
         self.tile_width = tile_width
         self.tile_height = tile_height
         self.tile_format_url = tile_format_url
+        self.mask_data = None
 
         self.zoom_level = int(zoom_level)
         if missing_z is None:
@@ -1207,9 +1227,9 @@ class ImageStackVolume(Volume):
         if image_leaf_shape is None:
             image_leaf_shape = [10, tile_height, tile_width]
 
-        scale = np.exp2(np.array([0, self.zoom_level, self.zoom_level])).astype(np.int64)
+        self.scale = np.exp2(np.array([0, self.zoom_level, self.zoom_level])).astype(np.int64)
 
-        data_shape = (np.zeros(3), np.divide(bounds, scale).astype(np.int64))
+        data_shape = (np.zeros(3), np.divide(bounds, self.scale).astype(np.int64))
         self.image_data = OctreeVolume(image_leaf_shape,
                                        data_shape,
                                        'float32',
@@ -1217,12 +1237,21 @@ class ImageStackVolume(Volume):
 
         self.label_data = None
 
+
+    def local_coord_to_world(self, a):
+        return np.floor_divide(a, self.scale)
+
+    def world_coord_to_local(self, a):
+        return np.multiply(a, self.scale)
+
     @property
     def resolution(self):
         return self.orig_resolution * np.exp2([0, self.zoom_level, self.zoom_level])
 
     def downsample(self, resolution):
         downsample = self._get_downsample_from_resolution(resolution)
+
+        # Todo: figure out this part
         zoom_level = np.min(downsample[[self.DIM.X, self.DIM.Y]])
         if zoom_level > 0:
             return ImageStackVolume(
@@ -1236,7 +1265,8 @@ class ImageStackVolume(Volume):
                     image_leaf_shape=self.image_data.leaf_shape).downsample(resolution)
         if np.all(np.equal(downsample, 0)):
             return self
-        return DownsampledVolume(self, downsample)
+        else:
+            return DownsampledVolume(self, downsample)
 
     def subvolume_bounds_generator(self, sparse_margin=None, **kwargs):
         if sparse_margin is not None:
@@ -1263,14 +1293,15 @@ class ImageStackVolume(Volume):
         if seed is None:
             seed = np.array(image_subvol.shape, dtype=np.int64) // 2
 
-        return Subvolume(image_subvol, label_subvol, seed, bounds.label_id)
+        return Subvolume(image_subvol, label_subvol, seed, bounds.label_id, bounds)
 
     def image_populator(self, bounds):
+        bounds = [bounds[i]/self.scale[i] for i in range(len(self.scalse))]
         image_subvol = np.zeros(tuple(bounds[1] - bounds[0]), dtype=np.float32)
-        col_range = map(int, (math.floor(bounds[0][self.DIM.X]/self.tile_width),
-                              math.ceil(bounds[1][self.DIM.X]/self.tile_width)))
-        row_range = map(int, (math.floor(bounds[0][self.DIM.Y]/self.tile_height),
-                              math.ceil(bounds[1][self.DIM.Y]/self.tile_height)))
+        col_range = list(map(int, (math.floor(bounds[0][self.DIM.X]/self.tile_width),
+                              math.ceil(bounds[1][self.DIM.X]/self.tile_width))))
+        row_range = list(map(int, (math.floor(bounds[0][self.DIM.Y]/self.tile_height),
+                              math.ceil(bounds[1][self.DIM.Y]/self.tile_height))))
         tile_size = np.array([1, self.tile_height, self.tile_width]).astype(np.int64)
         for z in xrange(bounds[0][self.DIM.Z], bounds[1][self.DIM.Z]):
             if z in self.missing_z:
