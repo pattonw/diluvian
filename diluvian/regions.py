@@ -521,6 +521,8 @@ class Region(object):
 
             output = model.predict_on_batch({'image_input': image_input,
                                              'mask_input': mask_input})
+            np.save('debugging/image', image_input)
+            np.save('debugging/region', output)
 
             for ind, block_data in enumerate(batch_block_data):
                 self.add_mask(output[ind, :, :, :, 0], block_data['position'])

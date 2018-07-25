@@ -221,15 +221,6 @@ def _make_main_parser():
     skeleton_fill_parser.add_argument(
             'skeleton_file', default=None,
             help='File containing the skeleton for validation. Currently supports JSON file types.')
-
-    test_parser = commandparsers.add_parser(
-            'test', parents=[common_parser, fill_common_parser, bounds_common_parser],
-            help='Seed periodically allong skeleton to look for false merges and missed branches.')
-    test_parser.add_argument(
-            'skeleton_file', default=None,
-            help='File containing the skeleton for validation. Currently supports JSON file types.')
-
-
     return parser
 
 
@@ -391,24 +382,6 @@ def main():
                                 remask_interval=args.remask_interval,
                                 moves=args.bounds_num_moves)
 
-    elif args.command == 'test':
-        print("testing")
-
-        init_seeds()
-        from .diluvian import fill_skeleton_with_model
-
-        volumes = load_volumes2(args.volume_files, args.in_memory)
-        fill_skeleton_with_model(args.model_file,
-                                args.skeleton_file,
-                                volumes=volumes,
-                                partition=args.partition_volumes,
-                                bias=args.bias,
-                                move_batch_size=args.move_batch_size,
-                                max_moves=args.max_moves,
-                                remask_interval=args.remask_interval,
-                                moves=args.bounds_num_moves)
-
-
 
 def load_volumes(volume_files, in_memory, name_regex=None):
     """Load HDF5 volumes specified in a TOML description file.
@@ -426,36 +399,16 @@ def load_volumes(volume_files, in_memory, name_regex=None):
     """
     # Late import to prevent loading large modules for short CLI commands.
     from .volumes import HDF5Volume
-
-    print('Loading volumes...')
-    if volume_files:
-        volumes = {}
-        for volume_file in volume_files:
-            volumes.update(HDF5Volume.from_toml(volume_file))
-    else:
-        volumes = HDF5Volume.from_toml(os.path.join(os.path.dirname(__file__), 'conf', 'cremi_datasets.toml'))
-
-    if name_regex is not None:
-        name_regex = re.compile(name_regex)
-        volumes = {k: v for k, v in six.iteritems(volumes) if name_regex.match(k)}
-
-    if in_memory:
-        print('Copying volumes to memory...')
-        volumes = {k: v.to_memory_volume() for k, v in six.iteritems(volumes)}
-
-    print('Done.')
-    return volumes
-
-def load_volumes2(volume_files, in_memory, name_regex=None):
     from .volumes import ImageStackVolume
 
     print('Loading volumes...')
     if volume_files:
         volumes = {}
         for volume_file in volume_files:
+            volumes.update(HDF5Volume.from_toml(volume_file))
             volumes.update(ImageStackVolume.from_toml(volume_file))
     else:
-        return
+        volumes = HDF5Volume.from_toml(os.path.join(os.path.dirname(__file__), 'conf', 'cremi_datasets.toml'))
 
     if name_regex is not None:
         name_regex = re.compile(name_regex)
