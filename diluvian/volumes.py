@@ -760,8 +760,8 @@ class Volume(object):
             if self.volume.mask_data is not None:
                 mask_min, mask_max = self.volume.mask_bounds
 
-                mask_min = self.volume.local_coord_to_world(mask_min)
-                mask_max = self.volume.local_coord_to_world(mask_max)
+                mask_min = self.volume.world_coord_to_local(mask_min)
+                mask_max = self.volume.world_coord_to_local(mask_max)
 
                 self.ctr_min = np.maximum(self.ctr_min, mask_min + self.label_margin)
                 self.ctr_max = np.minimum(self.ctr_max, mask_max - self.label_margin - 1)
@@ -777,7 +777,7 @@ class Volume(object):
                         ctr = np.array([self.random.randint(self.ctr_min[n], self.ctr_max[n])
                                         for n in range(3)]).astype(np.int64)
                     else:
-                        ctr = self.volume.local_coord_to_world(next(self.seeds))
+                        ctr = self.volume.world_coord_to_local(next(self.seeds))
                     start = ctr - self.margin
                     stop = ctr + self.margin + np.mod(self.shape, 2).astype(np.int64)
 
@@ -800,8 +800,7 @@ class Volume(object):
 
                     # Skip subvolumes with seeds in blank sections.
                     if self.skip_blank_sections and self.volume.image_data is not None:
-                        if self.volume.image_data[tuple(self.volume.world_coord_to_local(ctr))] == 0:
-                            print([x.data.shape for x in self.volume.image_data.iter_leaves()])
+                        if self.volume.image_data[tuple(self.volume.local_coord_to_world(ctr))] == 0:
                             logging.debug('Skipping subvolume with seed in blank section.')
                             continue
 
@@ -811,8 +810,8 @@ class Volume(object):
                     if self.volume.label_data is None:
                         label_id = None
                         break
-                    seed_min = self.volume.world_coord_to_local(ctr)
-                    seed_max = self.volume.world_coord_to_local(ctr + 1)
+                    seed_min = self.volume.local_coord_to_world(ctr)
+                    seed_max = self.volume.local_coord_to_world(ctr + 1)
                     label_ids = self.volume.label_data[
                             seed_min[0]:seed_max[0],
                             seed_min[1]:seed_max[1],
@@ -881,9 +880,9 @@ class VolumeView(Volume):
         return self.parent.shape
 
     def get_subvolume(self, bounds):
-        parent_start = self.parent_to_local(bounds.start) if bounds.start is not None else None
-        parent_stop = self.parent_to_local(bounds.stop) if bounds.stop is not None else None
-        parent_seed = self.parent_to_local(bounds.seed) if bounds.seed is not None else None
+        parent_start = self.local_to_parent(bounds.start) if bounds.start is not None else None
+        parent_stop = self.local_to_parent(bounds.stop) if bounds.stop is not None else None
+        parent_seed = self.local_to_parent(bounds.seed) if bounds.seed is not None else None
         parent_bounds = SubvolumeBounds(start=parent_start,
                                         stop=parent_stop,
                                         seed=parent_seed,
@@ -969,13 +968,13 @@ class DownsampledVolume(VolumeView):
 
     def local_to_parent(self, a):
         print("Downsampled local to parent")
-        print("local coords: (%s) to (%s) :parent coords"%(str(a), str(np.floor_divide(a, self.scale))))
-        return np.floor_divide(a, self.scale)
+        print("local coords: (%s) to (%s) :parent coords"%(str(a), str(np.multiply(a, self.scale))))
+        return np.multiply(a, self.scale)
 
     def parent_to_local(self, a):
         print("Downsampled parent to local")
-        print("parent coords: (%s) to (%s) :local coords"%(str(a),str(np.multiply(a, self.scale))))
-        return np.multiply(a, self.scale)
+        print("parent coords: (%s) to (%s) :local coords"%(str(a),str(np.floor_divide(a, self.scale))))
+        return np.floor_divide(a, self.scale)
 
     @property
     def shape(self):
@@ -984,9 +983,9 @@ class DownsampledVolume(VolumeView):
     def get_subvolume(self, bounds):
         subvol_shape = bounds.stop - bounds.start
         label_shape = subvol_shape - 2 * bounds.label_margin
-        parent_bounds = SubvolumeBounds(self.parent_to_local(bounds.start),
-                                        self.parent_to_local(bounds.stop),
-                                        label_margin=self.parent_to_local(bounds.label_margin),
+        parent_bounds = SubvolumeBounds(self.local_to_parent(bounds.start),
+                                        self.local_to_parent(bounds.stop),
+                                        label_margin=self.local_to_parent(bounds.label_margin),
                                         node_id = bounds.node_id)
         subvol = self.parent.get_subvolume(parent_bounds)
         subvol.image = subvol.image.reshape(
@@ -1014,7 +1013,7 @@ class DownsampledVolume(VolumeView):
         # Note that this is not a coordinate xform to parent in the typical
         # sense, just a rescaling of the coordinate in the subvolume-local
         # coordinates. Hence no similar call in VolumeView.get_subvolume.
-        subvol.seed = self.local_to_parent(subvol.seed)
+        subvol.seed = self.parent_to_local(subvol.seed)
 
         orig_bounds = subvol.bounds
         orig_bounds.start = orig_bounds.start // self.scale
@@ -1253,10 +1252,14 @@ class ImageStackVolume(Volume):
 
 
     def local_coord_to_world(self, a):
-        return np.floor_divide(a, self.scale)
+        print("Zoomed local to world")
+        print("local coords: (%s) to (%s) :world coords"%(str(a), str(a)))
+        return a
 
     def world_coord_to_local(self, a):
-        return np.multiply(a, self.scale)
+        print("Zoomed world to local")
+        print("world coords: (%s) to (%s) :local coords"%(str(a), str(np.floor_divide(a, self.scale))))
+        return np.floor_divide(a, self.scale)
 
     @property
     def resolution(self):
@@ -1310,7 +1313,6 @@ class ImageStackVolume(Volume):
         return Subvolume(image_subvol, label_subvol, seed, bounds.label_id, bounds)
 
     def image_populator(self, bounds):
-        bounds = [bounds[i]/self.scale[i] for i in range(len(self.scalse))]
         image_subvol = np.zeros(tuple(bounds[1] - bounds[0]), dtype=np.float32)
         col_range = list(map(int, (math.floor(bounds[0][self.DIM.X]/self.tile_width),
                               math.ceil(bounds[1][self.DIM.X]/self.tile_width))))
