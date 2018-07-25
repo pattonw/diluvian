@@ -778,8 +778,6 @@ class Volume(object):
                                         for n in range(3)]).astype(np.int64)
                     else:
                         ctr = self.volume.local_coord_to_world(next(self.seeds))
-                        print(ctr)
-                        print(self.volume.world_coord_to_local(ctr))
                     start = ctr - self.margin
                     stop = ctr + self.margin + np.mod(self.shape, 2).astype(np.int64)
 
@@ -850,16 +848,26 @@ class VolumeView(Volume):
         self.parent = parent
 
     def local_to_parent(self, a):
+        print("VolumeView local to parent")
+        print("local coords: (%s) to (%s) :parent coords"%(str(a), str(a)))
         return a
 
     def local_coord_to_world(self, a):
-        return self.parent.local_coord_to_world(self.local_to_parent(a))
+        print("VolumeView local to world")
+        b = self.parent.local_coord_to_world(self.local_to_parent(a))
+        print("local coords: (%s) to (%s) :world coords"%(str(a), str(b)))
+        return b
 
     def parent_to_local(self, a):
+        print("VolumeView parent to local")
+        print("parent coords: (%s) to (%s) :local coords"%(str(a), str(a)))
         return a
 
     def world_coord_to_local(self, a):
-        return self.parent_to_local(self.parent.world_coord_to_local(a))
+        print("VolumeView world to local")
+        b = self.parent_to_local(self.parent.world_coord_to_local(a))
+        print("world coords: (%s) to (%s) :local coords"%(str(a), str(b)))
+        return b
 
     def world_mat_to_local(self, m):
         return self.parent.world_mat_to_local(m)
@@ -914,9 +922,13 @@ class PartitionedVolume(VolumeView):
                        (np.multiply(partition_shape, self.partition_index + 1)).astype(np.int64))
 
     def local_to_parent(self, a):
+        print("PartitionVolume local to parent")
+        print("partitioned coords: (%s)\nparent coords: (%s)"%(str(a), str(a - self.bounds[0])))
         return a - self.bounds[0]
 
     def parent_to_local(self, a):
+        print("PartitionVolume parent to local")
+        print("partitioned coords: (%s)\nparent coords: (%s)"%(str(a + self.bounds[0]), str(a)))
         return a + self.bounds[0]
 
     @property
@@ -956,9 +968,13 @@ class DownsampledVolume(VolumeView):
                 mask_data=parent.mask_data)
 
     def local_to_parent(self, a):
+        print("Downsampled local to parent")
+        print("local coords: (%s) to (%s) :parent coords"%(str(a), str(np.floor_divide(a, self.scale))))
         return np.floor_divide(a, self.scale)
 
     def parent_to_local(self, a):
+        print("Downsampled parent to local")
+        print("parent coords: (%s) to (%s) :local coords"%(str(a),str(np.multiply(a, self.scale))))
         return np.multiply(a, self.scale)
 
     @property
@@ -966,14 +982,12 @@ class DownsampledVolume(VolumeView):
         return tuple(np.floor_divide(np.array(self.parent.shape), self.scale))
 
     def get_subvolume(self, bounds):
-        print(bounds.start, bounds.stop)
         subvol_shape = bounds.stop - bounds.start
         label_shape = subvol_shape - 2 * bounds.label_margin
         parent_bounds = SubvolumeBounds(self.parent_to_local(bounds.start),
                                         self.parent_to_local(bounds.stop),
                                         label_margin=self.parent_to_local(bounds.label_margin),
                                         node_id = bounds.node_id)
-        print(parent_bounds.start, parent_bounds.stop)
         subvol = self.parent.get_subvolume(parent_bounds)
         subvol.image = subvol.image.reshape(
                 [subvol_shape[0], self.scale[0],
