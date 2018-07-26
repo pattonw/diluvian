@@ -221,6 +221,14 @@ def _make_main_parser():
     skeleton_fill_parser.add_argument(
             'skeleton_file', default=None,
             help='File containing the skeleton for validation. Currently supports JSON file types.')
+
+
+    p_skeleton_fill_parser = commandparsers.add_parser(
+            'skeleton-fill-parallel', parents=[common_parser, fill_common_parser, bounds_common_parser],
+            help='Seed periodically allong skeleton to look for false merges and missed branches.')
+    p_skeleton_fill_parser.add_argument(
+            'skeleton_file', default=None,
+            help='File containing the skeleton for validation. Currently supports JSON file types.')
     return parser
 
 
@@ -373,6 +381,24 @@ def main():
 
         volumes = load_volumes(args.volume_files, args.in_memory)
         fill_skeleton_with_model(args.model_file,
+                                args.skeleton_file,
+                                volumes=volumes,
+                                partition=args.partition_volumes,
+                                bias=args.bias,
+                                move_batch_size=args.move_batch_size,
+                                max_moves=args.max_moves,
+                                remask_interval=args.remask_interval,
+                                moves=args.bounds_num_moves)
+
+    elif args.command == 'skeleton-fill-parallel':
+        print("validating skeleton")
+
+        # Late import to prevent loading large modules for short CLI commands.
+        init_seeds()
+        from .diluvian import fill_skeleton_with_model_threaded
+
+        volumes = load_volumes(args.volume_files, args.in_memory)
+        fill_skeleton_with_model_threaded(args.model_file,
                                 args.skeleton_file,
                                 volumes=volumes,
                                 partition=args.partition_volumes,

@@ -37,13 +37,35 @@ class Skeleton(object):
     def get_bounds(self):
         return self.start, self.stop
 
+    def is_filled(self, nid):
+        for node in self.tree.traverse():
+            if node.id == nid:
+                return node.body != None
+        raise Exception("node {0} not found".format(nid))
+
+    def outline(self, nodes, shape):
+        min_seed = [float("inf")] * 3
+        max_seed = [0] * 3
+        for node in nodes:
+            seed = node[2:]
+            min_seed = [min(seed[i], min_seed[i]) for i in range(3)]
+            max_seed = [max(seed[i], max_seed[i]) for i in range(3)]
+            region_node = self.RegionNode(node = node)
+            if not self.tree.add_region(region_node):
+                raise Exception("region not parent or child of previous regions")
+        self.start = [min_seed[i] - shape[i] // 2 for i in range(3)]
+        self.stop = [max_seed[i] + shape[i] // 2 + 1 for i in range(3)]
+
     def get_masks(self, show_seeds=True):
         for node in self.tree.traverse():
             mask = np.zeros(np.array(self.stop) - np.array(self.start))
-            node_mask, _ = node.region.to_body().get_seeded_component(
+            node_mask, _ = node.body.get_seeded_component(
                 CONFIG.postprocessing.closing_shape
             )
-            bounds = node.region.orig_bounds
+            bounds = node.bounds
+
+            print("node_mask shape: {0}".format(node_mask.shape))
+            print("node bounds: {0}".format(bounds.stop - bounds.start))
 
             mask[
                 list(
@@ -70,7 +92,7 @@ class Skeleton(object):
 
             yield mask, seed_mask
 
-    def add_region(self, region):
+    def add_region(self, region, update_bounds=False):
         """
         Add a region to the tree. Currently this is done by checking if the 
         region being added is a child or a parent of any of the regions in 
@@ -78,7 +100,7 @@ class Skeleton(object):
         """
         if not self.tree.add_region(self.RegionNode(region)):
             raise Exception("region not parent or child of previous regions")
-        else:
+        elif update_bounds:
             self.start = [
                 min(self.start[i], region.orig_bounds.start[i]) for i in range(3)
             ]
@@ -89,24 +111,24 @@ class Skeleton(object):
     def get_intersections(self):
         for parent in self.tree.traverse():
             for child in parent.children:
-                parent_mask, _ = parent.region.to_body().get_seeded_component(
+                parent_mask, _ = parent.body.get_seeded_component(
                     CONFIG.postprocessing.closing_shape
                 )
-                child_mask, _ = child.region.to_body().get_seeded_component(
+                child_mask, _ = child.body.get_seeded_component(
                     CONFIG.postprocessing.closing_shape
                 )
 
                 int_start = [
                     min(
-                        parent.region.orig_bounds.start[i],
-                        child.region.orig_bounds.start[i],
+                        parent.bounds.start[i],
+                        child.bounds.start[i],
                     )
                     for i in range(3)
                 ]
                 int_stop = [
                     max(
-                        parent.region.orig_bounds.stop[i],
-                        child.region.orig_bounds.stop[i],
+                        parent.bounds.stop[i],
+                        child.bounds.stop[i],
                     )
                     for i in range(3)
                 ]
@@ -116,9 +138,9 @@ class Skeleton(object):
                     list(
                         map(
                             slice,
-                            np.array(parent.region.orig_bounds.start)
+                            np.array(parent.bounds.start)
                             - np.array(int_start),
-                            np.array(parent.region.orig_bounds.stop)
+                            np.array(parent.bounds.stop)
                             - np.array(int_start),
                         )
                     )
@@ -127,9 +149,9 @@ class Skeleton(object):
                     list(
                         map(
                             slice,
-                            np.array(child.region.orig_bounds.start)
+                            np.array(child.bounds.start)
                             - np.array(int_start),
-                            np.array(child.region.orig_bounds.stop)
+                            np.array(child.bounds.stop)
                             - np.array(int_start),
                         )
                     )
@@ -203,6 +225,22 @@ class Skeleton(object):
             else:
                 return self.root.append_child(node)
 
+        def fill(self, orig_bounds, body):
+            for node in self.traverse():
+                if node.id == orig_bounds.node_id[0]:
+                    if node.body is not None:
+                        logging.debug("past body: {0},  new body: {1}".format(node.body, body))
+                        node.body = body
+                        node.bounds = orig_bounds
+                        return True
+                    else:
+                        logging.debug("new body: {0}".format(body))
+                        node.body = body
+                        node.bounds = orig_bounds
+                        return True
+                        raise Exception("resetting a region is not supported")
+            raise Exception("node {0} not found".format(nid))
+
         def dump_tree(self):
             return str(self.root)
 
@@ -213,14 +251,28 @@ class Skeleton(object):
                 return self.root.traverse()
 
     class RegionNode:
-        def __init__(self, region, children=None):
-            self.region = region
-            self.id = region.orig_bounds.node_id[0]
-            self.pid = region.orig_bounds.node_id[1]
+        def __init__(self, region=None, children=None, node=None):
+            self.body = None
+            self.bounds = None
+            if node is not None:
+                self.id = node[0]
+                self.pid = node[1]
+                self.center = node[2:]
+            elif region is not None:
+                self.body = region.to_body()
+                self.bounds = region.orig_bounds
+                self.id = region.orig_bounds.node_id[0]
+                self.pid = region.orig_bounds.node_id[1]
+            else:
+                raise Exception("node or region must be provided")
             if children:
                 self.children = children
             else:
                 self.children = []
+
+        def set_bounds(self, bounds):
+            self.bounds = bounds
+
 
         def append_child(self, regionNode):
             if self.is_parent(regionNode):

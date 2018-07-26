@@ -40,7 +40,27 @@
                 "toml/cremi_A.toml",
                 "--no-in-memory",
                 "-l",
-                "INFO",
+                "DEBUG",
+                "--max-moves",
+                "5"
+            ]
+        },
+        {
+            "name": "Python: working_image_parallel",
+            "type": "python",
+            "request": "launch",
+            "module": "diluvian",
+            "args": [
+                "skeleton-fill-parallel",
+                "skeletons/test-v2.csv",
+                "-m",
+                "trained_models/pattonw-v0/pattonw-v0.hdf5",
+                "-cd",
+                "-v",
+                "toml/cremi_A.toml",
+                "--no-in-memory",
+                "-l",
+                "DEBUG",
                 "--max-moves",
                 "5"
             ]
