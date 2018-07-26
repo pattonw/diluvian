@@ -54,7 +54,8 @@ def get_skeleton_bounds(filename, volumes, num_bounds, sparse=False, moves=None)
     seeds, ids = seeds_from_skeleton(filename)
 
     if len(volumes.keys()) > 1:
-        raise ValueError("TODO: support multiple volumes")
+        # TODO: support multiple volumes
+        raise ValueError("WIP. multiple volumes not yet supported")
     if moves is None:
         moves = 5
     else:
@@ -631,6 +632,10 @@ def fill_skeleton_with_model_threaded(
     remask_interval=None,
     sparse=False,
     moves=None,
+    num_workers=CONFIG.training.num_gpus,
+    worker_prequeue=1,
+    reject_early_termination=False,
+    reject_non_seed_components=True,
 ):
     def worker(
         worker_id,
@@ -693,7 +698,10 @@ def fill_skeleton_with_model_threaded(
 
             logging.debug("Worker %s: got seed %s", worker_id, str(node))
 
-            image = volume.subvolume(
+            print("start: {0}".format(node[2:] - np.floor_divide(region_shape, 2)))
+            print("stop: {0}".format(node[2:] + np.floor_divide(region_shape, 2) + 1))
+
+            image = volume.get_subvolume(
                 SubvolumeBounds(
                     start=node[2:] - np.floor_divide(region_shape, 2),
                     stop=node[2:] + np.floor_divide(region_shape, 2) + 1,
@@ -707,9 +715,9 @@ def fill_skeleton_with_model_threaded(
             region = Region(
                 image,
                 seed_vox=np.floor_divide(np.array(image.shape), 2) + 1,
-                sparse_mask=True,
+                sparse_mask=False,
                 block_padding="reflect",
-            )  
+            )
             region.bias_against_merge = bias
             early_termination = False
             try:
@@ -738,7 +746,8 @@ def fill_skeleton_with_model_threaded(
     if volumes is None:
         raise ValueError("Volumes must be provided.")
     elif len(volumes) > 1:
-        raise ValueError("TODO: support multiple volumes")
+        # TODO: support multiple volumes
+        raise ValueError("WIP. multiple volumes not yet supported")
 
     """
     Generate regions to fill:
@@ -751,10 +760,16 @@ def fill_skeleton_with_model_threaded(
 
     """
 
+    NUM_NODES = 1
+
+    region_shape = CONFIG.model.input_fov_shape  # TODO: make this customizable
+    vol_name = list(volumes.keys())[0]
+    volume = volumes[vol_name].downsample(CONFIG.volume.resolution)
     nodes, ids = seeds_from_skeleton(skeleton_file)
     nodes = [np.array(ids[i] + nodes[i]) for i in range(len(nodes))]
-    vol_name = volumes.keys()[0]
-    volume = volumes[vol_name]
+    nodes = nodes[:NUM_NODES]
+    skel = Skeleton()
+    skel.outline(nodes, region_shape)
 
     pbar = tqdm(desc="Node queue", total=len(nodes), miniters=1, smoothing=0.0)
     num_nodes = len(nodes)
@@ -779,7 +794,7 @@ def fill_skeleton_with_model_threaded(
     def queue_next_node():
         total = 0
         for node in nodes:
-            if prediction[node[-3], node[-2], node[-1]] != background_label_id:
+            if skel.is_filled(node[0]):
                 # This seed has already been filled.
                 total += 1
                 continue
@@ -824,37 +839,35 @@ def fill_skeleton_with_model_threaded(
         w.start()
         workers.append(w)
 
-    last_checkpoint_label = label_id
-
     # For each seed, create region, fill, threshold, and merge to output volume.
     while dispatched_nodes:
         processed_nodes = 1
         expected_node = dispatched_nodes.popleft()
-        logging.debug("Expecting seed %s", np.array_str(expected_node))
+        logging.debug("Expecting node %s", np.array_str(expected_node))
 
         if tuple(expected_node) in unordered_results:
             logging.debug(
-                "Expected seed %s is in old results", np.array_str(expected_node)
+                "Expected node %s is in old results", np.array_str(expected_node)
             )
             node = expected_node
-            region = unordered_results[tuple(node)]
+            body = unordered_results[tuple(node)]
             del unordered_results[tuple(node)]
 
         else:
-            node, region = results_queue.get(True)
+            node, body = results_queue.get(True)
             processed_nodes += queue_next_node()
 
             while not np.array_equal(node, expected_node):
-                logging.debug("Seed %s is early, stashing", np.array_str(node))
-                unordered_results[tuple(node)] = region
-                node, region = results_queue.get(True)
+                logging.debug("Node %s is early, stashing", np.array_str(node))
+                unordered_results[tuple(node)] = body
+                node, body = results_queue.get(True)
                 processed_nodes += queue_next_node()
 
         logging.debug("Processing node at %s", np.array_str(node))
         pbar.set_description("Node " + np.array_str(node))
         pbar.update(processed_nodes)
 
-        if prediction[node[-3], node[-2], node[-1]] != background_label_id:
+        if skel.is_filled(node[0]):
             # This seed has already been filled.
             logging.debug(
                 "Node (%s) was filled but has been covered in the meantime.",
@@ -866,20 +879,20 @@ def fill_skeleton_with_model_threaded(
             loading_lock.release()
             continue
 
-        if region.body() is None:
+        if body is None:
             logging.debug("Body was None.")
             continue
 
-        if reject_non_seed_components and not region.body().is_seed_in_mask():
+        if reject_non_seed_components and not body.is_seed_in_mask():
             logging.debug("Seed (%s) is not in its body.", np.array_str(node[2:]))
             continue
 
         if reject_non_seed_components:
-            mask, bounds = region.body().get_seeded_component(
+            mask, bounds = body.get_seeded_component(
                 CONFIG.postprocessing.closing_shape
             )
         else:
-            mask, bounds = region.body()._get_bounded_mask()
+            mask, bounds = body._get_bounded_mask()
 
         body_size = np.count_nonzero(mask)
 
@@ -887,19 +900,16 @@ def fill_skeleton_with_model_threaded(
             logging.debug("Body was empty.")
             continue
 
-        # Generate a label ID for this region.
-        label_id += 1
-        if label_id == background_label_id:
-            label_id += 1
-
         logging.debug("Adding body to prediction label volume.")
         bounds_shape = list(map(slice, bounds[0], bounds[1]))
-        prediction_mask = prediction[bounds_shape] == background_label_id
+        """
+        I dont think this section is necessary for the skeleton
+
         for node in dispatched_nodes:
             if (
-                np.all(bounds[0] <= node)
-                and np.all(bounds[1] > node)
-                and mask[tuple(node - bounds[0])]
+                np.all(bounds[0] <= node[2:])
+                and np.all(bounds[1] > node[2:])
+                and mask[tuple(node[2:] - bounds[0])]
             ):
                 loading_lock.acquire()
                 if tuple(node) not in revoked_nodes:
@@ -910,33 +920,16 @@ def fill_skeleton_with_model_threaded(
         ] += 1
         label_shape = np.logical_and(prediction_mask, mask)
         prediction[bounds_shape][np.logical_and(prediction_mask, mask)] = label_id
+        """
 
-        logging.info(
-            "Filled seed (%s) with %s voxels labeled %s.",
-            np.array_str(node),
-            body_size,
-            label_id,
-        )
+        orig_bounds = SubvolumeBounds(
+                    start=node[2:] - np.floor_divide(region_shape, 2),
+                    stop=node[2:] + np.floor_divide(region_shape, 2) + 1,
+                    node_id=node[0:2],
+                )
+        skel.tree.fill(orig_bounds, body)
 
-        if max_bodies and label_id >= max_bodies:
-            # Drain the queues.
-            while not node_queue.empty():
-                node_queue.get_nowait()
-            break
-
-        if (
-            checkpoint_filename is not None
-            and label_id - last_checkpoint_label > checkpoint_label_interval
-        ):
-            config = HDF5Volume.write_file(
-                checkpoint_filename + ".hdf5",
-                CONFIG.volume.resolution,
-                label_data=prediction,
-            )
-            config["name"] = "segmentation checkpoint"
-            with open(checkpoint_filename + ".toml", "wb") as tomlfile:
-                tomlfile.write("# Filling model: {}\n".format(model_file))
-                tomlfile.write(str(toml.dumps({"dataset": [config]})))
+        logging.info("Filled node (%s)", np.array_str(node))
 
     for _ in range(num_workers):
         node_queue.put("DONE")
@@ -955,8 +948,8 @@ def fill_skeleton_with_model_threaded(
         elif s == "r":
             skel.render_skeleton()
         elif s == "ra":
-            for region in regions:
-                region_copy = region.unfilled_copy()
+            for body in regions:
+                region_copy = body.unfilled_copy()
                 region_copy.fill_render(
                     model,
                     progress=True,
@@ -1028,7 +1021,6 @@ def fill_skeleton_with_model(
     # load the model as usual.
     model = load_model(model_file, CONFIG.network)
 
-    regions = []
     skel = Skeleton()
     for region in skeleton:
         region.bias_against_merge = bias
@@ -1044,7 +1036,7 @@ def fill_skeleton_with_model(
             )
         except (StopIteration, Region.EarlyFillTermination):
             pass
-        skel.add_region(region)
+        skel.add_region(region, True)
     while True:
         s = raw_input(
             "Press Enter to continue, " "r to 3D render body, " "q to quit..."
