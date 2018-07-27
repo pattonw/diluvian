@@ -941,12 +941,15 @@ def fill_skeleton_with_model_threaded(
 
     while True:
         s = raw_input(
-            "Press Enter to continue, " "r to 3D render body, " "q to quit..."
+            "Press Enter to continue, " "r to 3D render body, " "q to quit..." "rs to save masks for visualization elsewhere"
         )
         if s == "q":
             return
         elif s == "r":
             skel.render_skeleton()
+        elif s = "rs":
+            s = raw_input("Please enter the desired file name:\n")
+            skel.save_skeleton_masks(s)
         elif s == "ra":
             for body in regions:
                 region_copy = body.unfilled_copy()
