@@ -59,13 +59,18 @@ class Skeleton(object):
     def get_masks(self, show_seeds=True):
         for node in self.tree.traverse():
             mask = np.zeros(np.array(self.stop) - np.array(self.start))
-            node_mask, _ = node.body.get_seeded_component(
-                CONFIG.postprocessing.closing_shape
-            )
-            bounds = node.bounds
+            try:
+                node_mask, _ = node.body.get_seeded_component(
+                    CONFIG.postprocessing.closing_shape
+                )
+                bounds = node.bounds
+            except Exception as e:
+                logging.debug(e)
+                node_mask = node.body.mask
+                bounds = node.bounds
 
-            print("node_mask shape: {0}".format(node_mask.shape))
-            print("node bounds: {0}".format(bounds.stop - bounds.start))
+            logging.debug("node_mask shape: {0}".format(node_mask.shape))
+            logging.debug("node bounds: {0}".format(bounds.stop - bounds.start))
 
             mask[
                 list(

@@ -85,7 +85,7 @@ def seeds_from_skeleton(filename):
         reader = csv.reader(csvfile, delimiter=",", quotechar="|")
         for row in reader:
             coords.append([int(float(x)) for x in row[2:]])
-            if row[1] == "null" or row[1] == "none":
+            if row[1].strip() == "null" or row[1].strip() == "none":
                 ids.append([int(float(row[0])), None])
                 if len(ids) > 1:
                     ids = ids[-1] + ids[:-1]
@@ -698,13 +698,20 @@ def fill_skeleton_with_model_threaded(
 
             logging.debug("Worker %s: got seed %s", worker_id, str(node))
 
-            logging.debug("start: {0}".format(node[2:] - np.floor_divide(region_shape, 2)))
-            logging.debug("stop: {0}".format(node[2:] + np.floor_divide(region_shape, 2) + 1))
+            logging.debug(
+                "start: {0}".format(node[2:] - np.floor_divide(region_shape, 2))
+            )
+            logging.debug(
+                "stop: {0}".format(node[2:] + np.floor_divide(region_shape, 2) + 1)
+            )
 
             image = volume.get_subvolume(
                 SubvolumeBounds(
-                    start=volume.world_coord_to_local(node[2:]) - np.floor_divide(region_shape, 2),
-                    stop=volume.world_coord_to_local(node[2:]) + np.floor_divide(region_shape, 2) + 1,
+                    start=volume.world_coord_to_local(node[2:])
+                    - np.floor_divide(region_shape, 2),
+                    stop=volume.world_coord_to_local(node[2:])
+                    + np.floor_divide(region_shape, 2)
+                    + 1,
                     node_id=node[0:2],
                 )
             ).image
@@ -735,13 +742,9 @@ def fill_skeleton_with_model_threaded(
                 early_termination = True
             except StopIteration:
                 pass
-            if reject_early_termination and early_termination:
-                body = None
-            else:
-                body = region.to_body()
             logging.debug("Worker %s: node %s filled", worker_id, str(node))
 
-            results.put((node, body))
+            results.put((node, region.to_body()))
 
     if volumes is None:
         raise ValueError("Volumes must be provided.")
@@ -880,53 +883,26 @@ def fill_skeleton_with_model_threaded(
             continue
 
         if body is None:
-            logging.debug("Body was None.")
-            continue
+            raise Exception("Body is None.")
 
-        if reject_non_seed_components and not body.is_seed_in_mask():
+        if not body.is_seed_in_mask():
             logging.debug("Seed (%s) is not in its body.", np.array_str(node[2:]))
-            continue
 
-        if reject_non_seed_components:
-            mask, bounds = body.get_seeded_component(
-                CONFIG.postprocessing.closing_shape
-            )
-        else:
-            mask, bounds = body._get_bounded_mask()
+        mask, bounds = body._get_bounded_mask(CONFIG.postprocessing.closing_shape)
 
         body_size = np.count_nonzero(mask)
 
         if body_size == 0:
-            logging.debug("Body was empty.")
-            continue
+            logging.debug("Body is empty.")
 
         logging.debug("Adding body to prediction label volume.")
         bounds_shape = list(map(slice, bounds[0], bounds[1]))
-        """
-        I dont think this section is necessary for the skeleton
-
-        for node in dispatched_nodes:
-            if (
-                np.all(bounds[0] <= node[2:])
-                and np.all(bounds[1] > node[2:])
-                and mask[tuple(node[2:] - bounds[0])]
-            ):
-                loading_lock.acquire()
-                if tuple(node) not in revoked_nodes:
-                    revoked_nodes.append(tuple(node))
-                loading_lock.release()
-        conflict_count[bounds_shape][
-            np.logical_and(np.logical_not(prediction_mask), mask)
-        ] += 1
-        label_shape = np.logical_and(prediction_mask, mask)
-        prediction[bounds_shape][np.logical_and(prediction_mask, mask)] = label_id
-        """
 
         orig_bounds = SubvolumeBounds(
-                    start=node[2:] - np.floor_divide(region_shape, 2),
-                    stop=node[2:] + np.floor_divide(region_shape, 2) + 1,
-                    node_id=node[0:2],
-                )
+            start=node[2:] - np.floor_divide(region_shape, 2),
+            stop=node[2:] + np.floor_divide(region_shape, 2) + 1,
+            node_id=node[0:2],
+        )
         skel.tree.fill(orig_bounds, body)
 
         logging.info("Filled node (%s)", np.array_str(node))
@@ -941,7 +917,10 @@ def fill_skeleton_with_model_threaded(
 
     while True:
         s = raw_input(
-            "Press Enter to continue, " "r to 3D render body, " "q to quit..." "rs to save masks for visualization elsewhere"
+            "Press Enter to continue, "
+            "r to 3D render body, "
+            "rs to save masks for visualization elsewhere, "
+            "q to quit..."
         )
         if s == "q":
             return
