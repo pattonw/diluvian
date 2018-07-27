@@ -698,8 +698,8 @@ def fill_skeleton_with_model_threaded(
 
             logging.debug("Worker %s: got seed %s", worker_id, str(node))
 
-            print("start: {0}".format(node[2:] - np.floor_divide(region_shape, 2)))
-            print("stop: {0}".format(node[2:] + np.floor_divide(region_shape, 2) + 1))
+            logging.debug("start: {0}".format(node[2:] - np.floor_divide(region_shape, 2)))
+            logging.debug("stop: {0}".format(node[2:] + np.floor_divide(region_shape, 2) + 1))
 
             image = volume.get_subvolume(
                 SubvolumeBounds(
