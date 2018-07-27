@@ -947,7 +947,7 @@ def fill_skeleton_with_model_threaded(
             return
         elif s == "r":
             skel.render_skeleton()
-        elif s = "rs":
+        elif s == "rs":
             s = raw_input("Please enter the desired file name:\n")
             skel.save_skeleton_masks(s)
         elif s == "ra":
