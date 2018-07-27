@@ -171,8 +171,6 @@ class Skeleton(object):
                 yield mask
 
     def save_skeleton_masks(self, output_file, show_seeds=True):
-        fig = mlab.figure(size=(1280, 720))
-
         output = []
         for mask, seed_mask in self.get_masks(show_seeds):
             output.append((mask, seed_mask))
