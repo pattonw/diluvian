@@ -174,7 +174,7 @@ class Skeleton(object):
         output = []
         for mask, seed_mask in self.get_masks(show_seeds):
             output.append((mask, seed_mask))
-        np.save('output_file', output)
+        np.save(output_file, output)
 
 
     def render_skeleton(self, show_seeds=True):
