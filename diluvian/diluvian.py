@@ -703,8 +703,8 @@ def fill_skeleton_with_model_threaded(
 
             image = volume.get_subvolume(
                 SubvolumeBounds(
-                    start=node[2:] - np.floor_divide(region_shape, 2),
-                    stop=node[2:] + np.floor_divide(region_shape, 2) + 1,
+                    start=volume.world_coord_to_local(node[2:]) - np.floor_divide(region_shape, 2),
+                    stop=volume.world_coord_to_local(node[2:]) + np.floor_divide(region_shape, 2) + 1,
                     node_id=node[0:2],
                 )
             ).image
