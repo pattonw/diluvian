@@ -704,11 +704,8 @@ def fill_skeleton_with_model_threaded(
 
             image = volume.get_subvolume(
                 SubvolumeBounds(
-                    start=volume.world_coord_to_local(node[2:])
-                    - np.floor_divide(region_shape, 2),
-                    stop=volume.world_coord_to_local(node[2:])
-                    + np.floor_divide(region_shape, 2)
-                    + 1,
+                    start=(node[2:]) - np.floor_divide(region_shape, 2),
+                    stop=(node[2:]) + np.floor_divide(region_shape, 2) + 1,
                     node_id=node[0:2],
                 )
             ).image
@@ -759,15 +756,13 @@ def fill_skeleton_with_model_threaded(
 
     """
 
-    NUM_NODES = 300
-
     vol_name = list(volumes.keys())[0]
     volume = volumes[vol_name].downsample(CONFIG.volume.resolution)
     seeds, ids = seeds_from_skeleton(skeleton_file)
+    seeds = [list(volume.world_coord_to_local(seed)) for seed in seeds]
     nodes = [np.array(ids[i] + seeds[i]) for i in range(len(seeds))]
-    nodes = nodes[:NUM_NODES]
-    skel = Skeleton(ids[:NUM_NODES])
-    skel.outline(nodes, region_shape)
+    skel = Skeleton(ids)
+    region_shape = CONFIG.model.input_fov_shape
 
     pbar = tqdm(desc="Node queue", total=len(nodes), miniters=1, smoothing=0.0)
     num_nodes = len(nodes)
@@ -893,14 +888,11 @@ def fill_skeleton_with_model_threaded(
         logging.debug("Adding body to prediction label volume.")
         bounds_shape = list(map(slice, bounds[0], bounds[1]))
 
-        print("{0} to {1}".format(node[2:], volume.world_coord_to_local(node[2:])))
-
         orig_bounds = SubvolumeBounds(
-            start=volume.world_coord_to_local(node[2:]) - np.floor_divide(region_shape, 2),
-            stop=volume.world_coord_to_local(node[2:]) + np.floor_divide(region_shape, 2) + 1,
-            node_id=node[0:2],
+            start=node[2:] - np.floor_divide(region_shape, 2),
+            stop=node[2:] + np.floor_divide(region_shape, 2) + 1,
         )
-        skel.tree.fill(orig_bounds, body)
+        skel.fill(node[0], orig_bounds, body)
 
         logging.debug("Filled node (%s)", np.array_str(node))
 

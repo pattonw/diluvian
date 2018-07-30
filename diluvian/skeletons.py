@@ -5,6 +5,7 @@ from __future__ import division
 
 import itertools
 import logging
+from collections import deque
 
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
@@ -25,54 +26,61 @@ class Skeleton(object):
     A Skeleton is an object that handles storing information about
     the skeleton you wish to flood fill and contains methods for
     its analysis.
+
+    Note, the skeleton object only deals with coordinates in the
+    output space. So if there was any downsampling, make sure all
+    coordinates are properly scaled before being passed to the 
+    skeleton.
     """
 
-    def __init__(self):
+    def __init__(self, id_pairs):
         """
-        initialize a new Skeleton with no data.
+        initialize a new Skeleton with a list of id_pairs.
+        each id_pair is a tuple (id, parent_id)
+        if id == parent_id, that point is the root.
         """
         self.tree = self.SkeletonTree()
         self.start = [float("inf"), float("inf"), float("inf")]
         self.stop = [0, 0, 0]
+        self.outline_from_pairs(id_pairs)
 
     def get_bounds(self):
         """
         get the absolute min and max coordinates of the
         volume covered by the skeleton.
         """
-        return self.start, self.stop
+        if all([self.start[i] < self.stop[i] for i in range(len(self.start))]):
+            return np.array(self.start), np.array(self.stop)
+        else:
+            raise Exception("Skeleton does not have a positive volume")
+
+    def update_bounds(self, bounds):
+        self.start = np.array([min(self.start[i], bounds.start[i]) for i in range(3)])
+        self.stop = np.array([max(self.stop[i], bounds.stop[i]) for i in range(3)])
+
+    def fill(self, nid, bounds, body):
+        if self.tree.fill(nid, bounds, body):
+            logging.info("region {0} successfully filled".format(nid))
+            self.update_bounds(bounds)
 
     def is_filled(self, nid):
         """
         helper method for filling in a tree
         """
-        for node in self.tree.traverse():
-            if node.id == nid:
-                return node.body != None
-        raise Exception("node {0} not found".format(nid))
+        node = self.tree.search(nid)
+        if node:
+            return node.is_filled()
+        else:
+            raise Exception("node {0} not found".format(nid))
 
-    def outline(self, nodes, shape):
+    def outline_from_pairs(self, pairs):
         """
         This method takes a list of nodes with their coordinates and a shape vector.
         Each nodes coordinate is assumed to be the desired seed point of a volume of the 
         desired shape centered on the given node. This is used to build the tree structure
         before starting flood filling.
-
-        This is to avoid spending time filling a skeleton with unhandled abnormalities.
-        Currently unhandled abnormalities to be added:
-        - disconnected segments in tree
         """
-        min_seed = [float("inf")] * 3
-        max_seed = [0] * 3
-        for node in nodes:
-            seed = [node[2 + i] // [1, 4, 4][i] for i in range(3)]
-            min_seed = [min(seed[i], min_seed[i]) for i in range(3)]
-            max_seed = [max(seed[i], max_seed[i]) for i in range(3)]
-            region_node = self.RegionNode(node=node)
-            if not self.tree.add_region(region_node):
-                raise Exception("region not parent or child of previous regions")
-        self.start = [int(min_seed[i] - shape[i] // 2) for i in range(3)]
-        self.stop = [int(max_seed[i] + shape[i] // 2 + 1) for i in range(3)]
+        self.tree.outline(pairs)
 
     def get_masks(self, show_seeds=True):
         """
@@ -147,13 +155,14 @@ class Skeleton(object):
         and seeds. Much more efficient and saves on a lot of memory and computation
         time.
         """
-        self.skeleton_mask = np.zeros(self.stop - self.start)
+        start, stop = self.get_bounds()
+        self.skeleton_mask = np.zeros(stop - start)
         for node in self.tree.traverse():
             try:
-                node_mask, _ = node.body.get_seeded_component(
+                node_mask, _ = node.get_body().get_seeded_component(
                     CONFIG.postprocessing.closing_shape
                 )
-                bounds = node.bounds
+                node_start, node_stop = node.get_bounds()
             except Exception as e:
                 logging.debug(e)
                 continue
@@ -162,8 +171,8 @@ class Skeleton(object):
                 list(
                     map(
                         slice,
-                        np.array(bounds.start) - np.array(self.start),
-                        np.array(bounds.stop) - np.array(self.start),
+                        np.array(node_start) - np.array(start),
+                        np.array(node_stop) - np.array(start),
                     )
                 )
             ] = np.maximum(
@@ -171,30 +180,14 @@ class Skeleton(object):
                     list(
                         map(
                             slice,
-                            np.array(bounds.start) - np.array(self.start),
-                            np.array(bounds.stop) - np.array(self.start),
+                            np.array(node_start) - np.array(start),
+                            np.array(node_stop) - np.array(start),
                         )
                     )
                 ],
                 node_mask,
             )
         return self.skeleton_mask
-
-    def add_region(self, region, update_bounds=False):
-        """
-        Add a region to the tree. Currently this is done by checking if the 
-        region being added is a child or a parent of any of the regions in 
-        the tree, if not it will throw an error.
-        """
-        if not self.tree.add_region(self.RegionNode(region)):
-            raise Exception("region not parent or child of previous regions")
-        elif update_bounds:
-            self.start = [
-                min(self.start[i], region.orig_bounds.start[i]) for i in range(3)
-            ]
-            self.stop = [
-                max(self.stop[i], region.orig_bounds.stop[i]) for i in range(3)
-            ]
 
     def get_intersections(self):
         """
@@ -222,41 +215,23 @@ class Skeleton(object):
                 ]
                 int_mask = np.zeros(np.array(int_stop) - np.array(int_start))
 
-                int_mask += parent_mask[list(
-                        map(
-                            slice,
-                            np.array(int_start),
-                            np.array(int_stop),
-                        )
-                    )] + child_mask[list(
-                        map(
-                            slice,
-                            np.array(int_start),
-                            np.array(int_stop),
-                        )
-                    )]
+                int_mask += (
+                    parent_mask[
+                        list(map(slice, np.array(int_start), np.array(int_stop)))
+                    ]
+                    + child_mask[
+                        list(map(slice, np.array(int_start), np.array(int_stop)))
+                    ]
+                )
                 int_mask = int_mask // 2
 
-                mask = np.zeros(np.array(self.stop) - np.array(self.start))
-                mask[
-                    list(
-                        map(
-                            slice,
-                            np.array(int_start) - np.array(self.start),
-                            np.array(int_stop) - np.array(self.start),
-                        )
-                    )
-                ] = int_mask
-                yield mask
+                yield int_mask, int_start
 
     def save_skeleton_masks(self, output_file, show_seeds=True):
         """
         save skeleton masks to a file for rendering elsewhere
         """
-        output = []
-        for mask, seed_mask in self.get_masks(show_seeds):
-            output.append((mask, seed_mask))
-        np.save(output_file, output)
+        np.save(output_file, self.get_skeleton_mask())
 
     def render_skeleton(self, show_seeds=True, with_intersections=False):
         """
@@ -302,7 +277,7 @@ class Skeleton(object):
             mlab.orientation_axes(figure=fig2, xlabel="Z", zlabel="X")
             mlab.view(azimuth=45, elevation=30, focalpoint="auto", roll=90, figure=fig2)
         mlab.show()
-    
+
     def render_large_skeleton(self):
         """
         Render the entire skeleton, ignoring individual sections and seed points.
@@ -328,51 +303,45 @@ class Skeleton(object):
         The skeleton tree class is a pretty standard tree data structure.
         The tree has a root node from which it can iterate of all of its nodes.
         """
+
         def __init__(self):
             """
             Initialize an empty tree
             """
             self.root = None
 
-        def add_region(self, node):
-            """
-            add a region to the tree.
-
-            WIP:
-            Currently any node to be added must either be a parent or a child of
-            nodes already in the tree. Does not yet support building the tree 
-            with arbitrary node input order.
-            """
+        def outline(self, pairs):
+            nodes = {}
+            for id, pid in pairs:
+                nodes[id] = self.RegionNode(id)
+            for id, pid in pairs:
+                if (pid is None or id == pid) and self.root is None:
+                    self.root = nodes[id]
+                elif pid is None or id == pid:
+                    raise Exception("Multiple root nodes not supported")
+                else:
+                    child = nodes[id]
+                    parent = nodes[pid]
+                    parent.append_child(child)
             if self.root is None:
-                self.root = node
-                return True
-            elif self.root.is_child(node):
-                node.append_child(self.root)
-                self.root = node
-                return True
-            else:
-                return self.root.append_child(node)
+                raise Exception("Root node was not in the list")
+            if len([x for x in self.traverse()]) != len(pairs):
+                raise Exception(
+                    "number of nodes in tree ({0}) does not match number of nodes given ({1})".format(
+                        len([x for x in self.traverse()]), len(pairs)
+                    )
+                )
 
-        def fill(self, orig_bounds, body):
+        def fill(self, key, bounds, body):
             """
             Fill in an existing node with data from flood filling.
             """
-            for node in self.traverse():
-                if node.id == orig_bounds.node_id[0]:
-                    if node.body is not None:
-                        logging.debug(
-                            "past body: {0},  new body: {1}".format(node.body, body)
-                        )
-                        node.body = body
-                        node.bounds = orig_bounds
-                        return True
-                    else:
-                        logging.debug("new body: {0}".format(body))
-                        node.body = body
-                        node.bounds = orig_bounds
-                        return True
-                        raise Exception("resetting a region is not supported")
-            raise Exception("node {0} not found".format(nid))
+            x = self.search(key)
+            if x:
+                return x.set_data(bounds, body)
+            else:
+                raise Exception("node {0} not found".format(nid))
+            
 
         def dump_tree(self):
             """
@@ -380,99 +349,113 @@ class Skeleton(object):
             """
             return str(self.root)
 
+        def search(self, key):
+            for node in self.traverse():
+                if node.has_key(key):
+                    return node
+            raise Exception("node {0} does not exist".format(key))
+
         def traverse(self):
             """
             Iterate over the elements of the tree
             """
             if self.root is None:
-                print("NO ROOTS")
+                logging.debug("NO ROOTS")
             else:
-                return self.root.traverse()
+                return self.breadth_first_traversal()
 
-    class RegionNode:
-        """
-        The RegionNode goes along with the SkeletonTree
+            
+        def breadth_first_traversal(self):
+            queue = deque([self.root])
 
-        Each node contains information about the region it represents such as bounds
-        and the flood filled mask.
-        """
-        def __init__(self, region=None, children=None, node=None):
+            while len(queue) > 0:
+                current = queue.popleft()
+                yield current
+                for child in current.get_children():
+                    queue.append(child)
+
+        class RegionNode:
             """
-            initialize a node with either a region or a node
+            The RegionNode goes along with the SkeletonTree
+
+            Each node contains information about the region it represents such as bounds
+            and the flood filled mask.
             """
-            self.body = None
-            self.bounds = None
-            if node is not None:
-                self.id = node[0]
-                self.pid = node[1]
-                self.center = node[2:]
-            elif region is not None:
-                self.body = region.to_body()
-                self.bounds = region.orig_bounds
-                self.id = region.orig_bounds.node_id[0]
-                self.pid = region.orig_bounds.node_id[1]
-            else:
-                raise Exception("node or region must be provided")
-            if children:
-                self.children = children
-            else:
-                self.children = []
 
-        def set_bounds(self, bounds):
-            """
-            set the bounds of a regionNode
-            """
-            self.bounds = bounds
+            def __init__(self, id):
+                """
+                initialize a node with either a region or a node
+                """
+                self.value = {
+                    "body": None,
+                    "start": None,
+                    "stop": None,
+                    "children": [],
+                    "is_filled": False,
+                    "has_volume": False,
+                }
+                self.key = id
 
-        def append_child(self, regionNode):
-            if self.is_parent(regionNode):
-                self.children.append(regionNode)
-                return True
-            else:
-                for child in self.children:
-                    if child.append_child(regionNode):
-                        return True
-                return False
+            def set_bounds(self, bounds):
+                self.value["start"] = bounds.start
+                self.value["stop"] = bounds.stop
 
-        def is_equal(self, node):
-            return node.id == self.id
+            def get_bounds(self):
+                return self.value["start"], self.value["stop"]
 
-        def is_parent(self, node):
-            return self.id == node.pid
+            def set_body(self, body):
+                self.value["body"] = body
 
-        def is_child(self, node):
-            return node.id == self.pid
+            def get_body(self):
+                return self.value["body"]
 
-        def has_id(self, id):
-            return self.id == id
+            def set_data(self, bounds, body):
+                self.set_bounds(bounds)
+                self.set_body(body)
+                self.value['is_filled'] = True
+                try:
+                    node_mask, _ = body.get_seeded_component(
+                        CONFIG.postprocessing.closing_shape
+                    )
+                    self.value['has_volume'] = True
+                    return True
+                except Exception as e:
+                    logging.debug(e)
+                    self.value['has_volume'] = False
+                    return False
 
-        def has_pid(self, pid):
-            return self.pid == pid
+            def append_child(self, child):
+                self.value["children"].append(child)
 
-        def has_parent(self):
-            return self.has_pid(None)
+            def get_children(self):
+                return self.value["children"]
 
-        def search_id(self, id):
-            if self.has_id(id):
-                return self
-            else:
-                for child in self.children:
-                    found = child.search_id(id)
-                    if found is not None:
-                        return found
-                return None
+            def get_child(self, index):
+                if len(self.get_children()) > index:
+                    return self.get_children[index]
+                else:
+                    return None
 
-        def traverse(self):
-            yield (self)
-            for child in self.children:
-                for x in child.traverse():
-                    yield (x)
+            def is_filled(self):
+                return self.value['is_filled']
 
-        def __str__(self):
-            if len(self.children) > 0:
-                return (
-                    str(self.id) + "[" + ",".join([str(x) for x in self.children]) + "]"
-                )
-            else:
-                return str(self.id)
+            def has_volume(self):
+                return self.value['has_volume']
+
+            def is_equal(self, node):
+                return node.key == self.key
+
+            def has_key(self, key):
+                return self.key == key
+
+            def __str__(self):
+                if len(self.children) > 0:
+                    return (
+                        str(self.key)
+                        + "["
+                        + ",".join([str(x) for x in self.get_children()])
+                        + "]"
+                    )
+                else:
+                    return str(self.key)
 
