@@ -22,42 +22,71 @@ from .util import get_color_shader, pad_dims, WrappedViewer
 
 class Skeleton(object):
     """
-    TODO: improve this.
-
-    The skeleton object is primarily a collection of regions that can be rendered together.
-    skeleton should have a tree structure in its regions so that it can efficiently find regions
-    to compare for intersections, and won't highlight all branches as missing.
+    A Skeleton is an object that handles storing information about
+    the skeleton you wish to flood fill and contains methods for
+    its analysis.
     """
 
     def __init__(self):
+        """
+        initialize a new Skeleton with no data.
+        """
         self.tree = self.SkeletonTree()
         self.start = [float("inf"), float("inf"), float("inf")]
         self.stop = [0, 0, 0]
 
     def get_bounds(self):
+        """
+        get the absolute min and max coordinates of the
+        volume covered by the skeleton.
+        """
         return self.start, self.stop
 
     def is_filled(self, nid):
+        """
+        helper method for filling in a tree
+        """
         for node in self.tree.traverse():
             if node.id == nid:
                 return node.body != None
         raise Exception("node {0} not found".format(nid))
 
     def outline(self, nodes, shape):
+        """
+        This method takes a list of nodes with their coordinates and a shape vector.
+        Each nodes coordinate is assumed to be the desired seed point of a volume of the 
+        desired shape centered on the given node. This is used to build the tree structure
+        before starting flood filling.
+
+        This is to avoid spending time filling a skeleton with unhandled abnormalities.
+        Currently unhandled abnormalities to be added:
+        - disconnected segments in tree
+        """
         min_seed = [float("inf")] * 3
         max_seed = [0] * 3
         for node in nodes:
-            seed = node[2:]
+            seed = [node[2 + i] // [1, 4, 4][i] for i in range(3)]
             min_seed = [min(seed[i], min_seed[i]) for i in range(3)]
             max_seed = [max(seed[i], max_seed[i]) for i in range(3)]
-            region_node = self.RegionNode(node = node)
+            region_node = self.RegionNode(node=node)
             if not self.tree.add_region(region_node):
                 raise Exception("region not parent or child of previous regions")
-        self.start = [min_seed[i] - shape[i] // 2 for i in range(3)]
-        self.stop = [max_seed[i] + shape[i] // 2 + 1 for i in range(3)]
+        self.start = [int(min_seed[i] - shape[i] // 2) for i in range(3)]
+        self.stop = [int(max_seed[i] + shape[i] // 2 + 1) for i in range(3)]
 
     def get_masks(self, show_seeds=True):
+        """
+        returns masks and seed masks for each individual section that has been filled.
+        This is useful for visualizations but very slow on large skeletons.
+
+        WIP: currently creates a numpy array of the same size as the whole skeleton
+        for each mask so that masks can be rendered in the same image with correct
+        relative positioning.
+        Instead mask array should only be as large as necessary and save its starting
+        coordinates to be hugely more efficient.
+        """
         for node in self.tree.traverse():
+            print("{0}, {1}".format(np.array(self.start), np.array(self.stop)))
             mask = np.zeros(np.array(self.stop) - np.array(self.start))
             try:
                 node_mask, _ = node.body.get_seeded_component(
@@ -66,11 +95,26 @@ class Skeleton(object):
                 bounds = node.bounds
             except Exception as e:
                 logging.debug(e)
-                node_mask = node.body.mask
+                node_mask = np.zeros(node.body.mask.shape)
                 bounds = node.bounds
 
+            print("Bounds: start: {0}, stop: {1}".format(bounds.start, bounds.stop))
             logging.debug("node_mask shape: {0}".format(node_mask.shape))
-            logging.debug("node bounds: {0}".format(bounds.stop - bounds.start))
+            logging.debug(
+                "Bounds: start: {0}, stop: {1}".format(bounds.start, bounds.stop)
+            )
+
+            print(
+                "slice: {0}".format(
+                    list(
+                        map(
+                            slice,
+                            np.array(bounds.start) - np.array(self.start),
+                            np.array(bounds.stop) - np.array(self.start),
+                        )
+                    )
+                )
+            )
 
             mask[
                 list(
@@ -97,6 +141,45 @@ class Skeleton(object):
 
             yield mask, seed_mask
 
+    def get_skeleton_mask(self):
+        """
+        get one big mask for the entire skeleton, ignoring individual sections
+        and seeds. Much more efficient and saves on a lot of memory and computation
+        time.
+        """
+        self.skeleton_mask = np.zeros(self.stop - self.start)
+        for node in self.tree.traverse():
+            try:
+                node_mask, _ = node.body.get_seeded_component(
+                    CONFIG.postprocessing.closing_shape
+                )
+                bounds = node.bounds
+            except Exception as e:
+                logging.debug(e)
+                continue
+
+            self.skeleton_mask[
+                list(
+                    map(
+                        slice,
+                        np.array(bounds.start) - np.array(self.start),
+                        np.array(bounds.stop) - np.array(self.start),
+                    )
+                )
+            ] = np.maximum(
+                self.skeleton_mask[
+                    list(
+                        map(
+                            slice,
+                            np.array(bounds.start) - np.array(self.start),
+                            np.array(bounds.stop) - np.array(self.start),
+                        )
+                    )
+                ],
+                node_mask,
+            )
+        return self.skeleton_mask
+
     def add_region(self, region, update_bounds=False):
         """
         Add a region to the tree. Currently this is done by checking if the 
@@ -114,6 +197,10 @@ class Skeleton(object):
             ]
 
     def get_intersections(self):
+        """
+        get the intersections of neighboring reagions in the tree.
+        Very useful for determining location of false merges.
+        """
         for parent in self.tree.traverse():
             for child in parent.children:
                 parent_mask, _ = parent.body.get_seeded_component(
@@ -124,43 +211,26 @@ class Skeleton(object):
                 )
 
                 int_start = [
-                    min(
-                        parent.bounds.start[i],
-                        child.bounds.start[i],
-                    )
-                    for i in range(3)
+                    max(parent.bounds.start[i], child.bounds.start[i]) for i in range(3)
                 ]
                 int_stop = [
-                    max(
-                        parent.bounds.stop[i],
-                        child.bounds.stop[i],
-                    )
-                    for i in range(3)
+                    min(parent.bounds.stop[i], child.bounds.stop[i]) for i in range(3)
                 ]
                 int_mask = np.zeros(np.array(int_stop) - np.array(int_start))
 
-                int_mask[
-                    list(
+                int_mask += parent_mask[list(
                         map(
                             slice,
-                            np.array(parent.bounds.start)
-                            - np.array(int_start),
-                            np.array(parent.bounds.stop)
-                            - np.array(int_start),
+                            np.array(int_start),
+                            np.array(int_stop),
                         )
-                    )
-                ] += parent_mask
-                int_mask[
-                    list(
+                    )] += child_mask[list(
                         map(
                             slice,
-                            np.array(child.bounds.start)
-                            - np.array(int_start),
-                            np.array(child.bounds.stop)
-                            - np.array(int_start),
+                            np.array(int_start),
+                            np.array(int_stop),
                         )
-                    )
-                ] += child_mask
+                    )]
                 int_mask = int_mask // 2
 
                 mask = np.zeros(np.array(self.stop) - np.array(self.start))
@@ -181,8 +251,7 @@ class Skeleton(object):
             output.append((mask, seed_mask))
         np.save(output_file, output)
 
-
-    def render_skeleton(self, show_seeds=True):
+    def render_skeleton(self, show_seeds=True, with_intersections=False):
         from mayavi import mlab
 
         fig = mlab.figure(size=(1280, 720))
@@ -205,21 +274,39 @@ class Skeleton(object):
         mlab.orientation_axes(figure=fig, xlabel="Z", zlabel="X")
         mlab.view(azimuth=45, elevation=30, focalpoint="auto", roll=90, figure=fig)
 
-        fig2 = mlab.figure(size=(1280, 720))
+        if with_intersections:
+            fig2 = mlab.figure(size=(1280, 720))
 
-        for intersection in self.get_intersections():
-            grid = mlab.pipeline.scalar_field(intersection)
-            grid.spacing = CONFIG.volume.resolution
+            for intersection in self.get_intersections():
+                grid = mlab.pipeline.scalar_field(intersection)
+                grid.spacing = CONFIG.volume.resolution
 
-            mlab.pipeline.iso_surface(
-                grid,
-                color=(random.random(), random.random(), random.random()),
-                contours=[0.5],
-                opacity=0.1,
-            )
+                mlab.pipeline.iso_surface(
+                    grid,
+                    color=(random.random(), random.random(), random.random()),
+                    contours=[0.5],
+                    opacity=0.1,
+                )
 
-        mlab.orientation_axes(figure=fig2, xlabel="Z", zlabel="X")
-        mlab.view(azimuth=45, elevation=30, focalpoint="auto", roll=90, figure=fig2)
+            mlab.orientation_axes(figure=fig2, xlabel="Z", zlabel="X")
+            mlab.view(azimuth=45, elevation=30, focalpoint="auto", roll=90, figure=fig2)
+        mlab.show()
+    
+    def render_large_skeleton(self):
+        from mayavi import mlab
+
+        fig = mlab.figure(size=(1280, 720))
+
+        mask = self.get_skeleton_mask()
+        grid = mlab.pipeline.scalar_field(mask)
+        grid.spacing = CONFIG.volume.resolution
+
+        colors = (random.random(), random.random(), random.random())
+        mlab.pipeline.iso_surface(grid, color=colors, contours=[0.5], opacity=0.1)
+
+        mlab.orientation_axes(figure=fig, xlabel="Z", zlabel="X")
+        mlab.view(azimuth=45, elevation=30, focalpoint="auto", roll=90, figure=fig)
+
         mlab.show()
 
     class SkeletonTree:
@@ -241,7 +328,9 @@ class Skeleton(object):
             for node in self.traverse():
                 if node.id == orig_bounds.node_id[0]:
                     if node.body is not None:
-                        logging.debug("past body: {0},  new body: {1}".format(node.body, body))
+                        logging.debug(
+                            "past body: {0},  new body: {1}".format(node.body, body)
+                        )
                         node.body = body
                         node.bounds = orig_bounds
                         return True
@@ -284,7 +373,6 @@ class Skeleton(object):
 
         def set_bounds(self, bounds):
             self.bounds = bounds
-
 
         def append_child(self, regionNode):
             if self.is_parent(regionNode):
