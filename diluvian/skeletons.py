@@ -82,7 +82,7 @@ class Skeleton(object):
         """
         self.tree.outline(pairs)
 
-    def get_masks(self, show_seeds=True):
+    def get_masks(self):
         """
         returns masks and seed masks for each individual section that has been filled.
         This is useful for visualizations but very slow on large skeletons.
@@ -98,7 +98,7 @@ class Skeleton(object):
                 mask, _ = node.body.get_seeded_component(
                     CONFIG.postprocessing.closing_shape
                 )
-                bounds = node.bounds
+                bounds = node.get_bounds()
                 id = node.key
             else:
                 continue
