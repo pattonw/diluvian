@@ -228,7 +228,7 @@ class Skeleton(object):
                             np.array(int_start),
                             np.array(int_stop),
                         )
-                    )] += child_mask[list(
+                    )] + child_mask[list(
                         map(
                             slice,
                             np.array(int_start),
