@@ -95,7 +95,7 @@ class Skeleton(object):
         """
         for node in self.tree.traverse():
             if node.has_volume():
-                mask, _ = node.body.get_seeded_component(
+                mask, _ = node.get_body().get_seeded_component(
                     CONFIG.postprocessing.closing_shape
                 )
                 bounds = node.get_bounds()
