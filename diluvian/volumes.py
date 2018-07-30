@@ -23,7 +23,6 @@ from six.moves import range as xrange
 from .config import CONFIG
 from .octrees import OctreeVolume
 from .util import get_nonzero_aabb
-import catpy
 
 
 DimOrder = namedtuple('DimOrder', ('X', 'Y', 'Z'))
