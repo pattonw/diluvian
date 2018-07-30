@@ -424,7 +424,7 @@ def load_volumes(volume_files, in_memory, name_regex=None):
     diluvian.volumes.Volume
     """
     # Late import to prevent loading large modules for short CLI commands.
-    # from .volumes import HDF5Volume
+    from .volumes import HDF5Volume
     from .volumes import ImageStackVolume
 
     print('Loading volumes...')
