@@ -431,10 +431,10 @@ def load_volumes(volume_files, in_memory, name_regex=None):
     if volume_files:
         volumes = {}
         for volume_file in volume_files:
-            #volumes.update(HDF5Volume.from_toml(volume_file))
+            volumes.update(HDF5Volume.from_toml(volume_file))
             volumes.update(ImageStackVolume.from_toml(volume_file))
     else:
-        #volumes = HDF5Volume.from_toml(os.path.join(os.path.dirname(__file__), 'conf', 'cremi_datasets.toml'))
+        volumes = HDF5Volume.from_toml(os.path.join(os.path.dirname(__file__), 'conf', 'cremi_datasets.toml'))
 
     if name_regex is not None:
         name_regex = re.compile(name_regex)

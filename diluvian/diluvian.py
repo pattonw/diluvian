@@ -920,7 +920,7 @@ def fill_skeleton_with_model_threaded(
             skel.render_large_skeleton()
         elif s == "s":
             s = raw_input("Please enter the desired file name:\n")
-            skel.save_skeleton_masks(s)
+            skel.save_skeleton_mask(s)
         elif s == "ra":
             for body in regions:
                 region_copy = body.unfilled_copy()

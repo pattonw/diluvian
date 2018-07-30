@@ -94,60 +94,15 @@ class Skeleton(object):
         coordinates to be hugely more efficient.
         """
         for node in self.tree.traverse():
-            print("{0}, {1}".format(np.array(self.start), np.array(self.stop)))
-            mask = np.zeros(np.array(self.stop) - np.array(self.start))
-            try:
-                node_mask, _ = node.body.get_seeded_component(
+            if node.has_volume():
+                mask, _ = node.body.get_seeded_component(
                     CONFIG.postprocessing.closing_shape
                 )
                 bounds = node.bounds
-            except Exception as e:
-                logging.debug(e)
-                node_mask = np.zeros(node.body.mask.shape)
-                bounds = node.bounds
-
-            print("Bounds: start: {0}, stop: {1}".format(bounds.start, bounds.stop))
-            logging.debug("node_mask shape: {0}".format(node_mask.shape))
-            logging.debug(
-                "Bounds: start: {0}, stop: {1}".format(bounds.start, bounds.stop)
-            )
-
-            print(
-                "slice: {0}".format(
-                    list(
-                        map(
-                            slice,
-                            np.array(bounds.start) - np.array(self.start),
-                            np.array(bounds.stop) - np.array(self.start),
-                        )
-                    )
-                )
-            )
-
-            mask[
-                list(
-                    map(
-                        slice,
-                        np.array(bounds.start) - np.array(self.start),
-                        np.array(bounds.stop) - np.array(self.start),
-                    )
-                )
-            ] = node_mask
-
-            if show_seeds:
-                node_center = [x // 2 for x in node_mask.shape]
-                seed_mask = np.zeros(np.array(self.stop) - np.array(self.start))
-                seed_mask[
-                    tuple(
-                        np.array(bounds.start)
-                        - np.array(self.start)
-                        + np.array(node_center)
-                    )
-                ] = 1
+                id = node.key
             else:
-                seed_mask = None
-
-            yield mask, seed_mask
+                continue
+            yield (mask, bounds)
 
     def get_skeleton_mask(self):
         """
@@ -227,11 +182,18 @@ class Skeleton(object):
 
                 yield int_mask, int_start
 
-    def save_skeleton_masks(self, output_file, show_seeds=True):
+    def save_skeleton_mask(self, output_file):
         """
         save skeleton masks to a file for rendering elsewhere
         """
         np.save(output_file, self.get_skeleton_mask())
+
+    def save_skeleton_masks(self, output_file):
+        output = []
+        for x in self.get_masks():
+            output.append(x)
+        np.save(output_file, output)
+
 
     def render_skeleton(self, show_seeds=True, with_intersections=False):
         """
