@@ -87,12 +87,9 @@ def seeds_from_skeleton(filename):
             coords.append([int(float(x)) for x in row[2:]])
             if row[1].strip() == "null" or row[1].strip() == "none":
                 ids.append([int(float(row[0])), None])
-                if len(ids) > 1:
-                    ids = ids[-1] + ids[:-1]
-                    coords = coords[-1] + coords[:-1]
             else:
                 ids.append([int(float(x)) for x in row[:2]])
-    return coords[0:20], ids[0:20]
+    return coords, ids
 
 
 def fill_volume_with_model(
@@ -733,7 +730,6 @@ def fill_skeleton_with_model_threaded(
                         model,
                         move_batch_size=move_batch_size,
                         max_moves=max_moves,
-                        progress=2 + worker_id,
                         stopping_callback=stopping_callback,
                         remask_interval=remask_interval,
                     )
@@ -763,15 +759,14 @@ def fill_skeleton_with_model_threaded(
 
     """
 
-    NUM_NODES = 1
+    NUM_NODES = 300
 
-    region_shape = CONFIG.model.input_fov_shape  # TODO: make this customizable
     vol_name = list(volumes.keys())[0]
     volume = volumes[vol_name].downsample(CONFIG.volume.resolution)
-    nodes, ids = seeds_from_skeleton(skeleton_file)
-    nodes = [np.array(ids[i] + nodes[i]) for i in range(len(nodes))]
+    seeds, ids = seeds_from_skeleton(skeleton_file)
+    nodes = [np.array(ids[i] + seeds[i]) for i in range(len(seeds))]
     nodes = nodes[:NUM_NODES]
-    skel = Skeleton()
+    skel = Skeleton(ids[:NUM_NODES])
     skel.outline(nodes, region_shape)
 
     pbar = tqdm(desc="Node queue", total=len(nodes), miniters=1, smoothing=0.0)
@@ -898,14 +893,16 @@ def fill_skeleton_with_model_threaded(
         logging.debug("Adding body to prediction label volume.")
         bounds_shape = list(map(slice, bounds[0], bounds[1]))
 
+        print("{0} to {1}".format(node[2:], volume.world_coord_to_local(node[2:])))
+
         orig_bounds = SubvolumeBounds(
-            start=node[2:] - np.floor_divide(region_shape, 2),
-            stop=node[2:] + np.floor_divide(region_shape, 2) + 1,
+            start=volume.world_coord_to_local(node[2:]) - np.floor_divide(region_shape, 2),
+            stop=volume.world_coord_to_local(node[2:]) + np.floor_divide(region_shape, 2) + 1,
             node_id=node[0:2],
         )
         skel.tree.fill(orig_bounds, body)
 
-        logging.info("Filled node (%s)", np.array_str(node))
+        logging.debug("Filled node (%s)", np.array_str(node))
 
     for _ in range(num_workers):
         node_queue.put("DONE")
@@ -919,14 +916,17 @@ def fill_skeleton_with_model_threaded(
         s = raw_input(
             "Press Enter to continue, "
             "r to 3D render body, "
-            "rs to save masks for visualization elsewhere, "
+            "rs to 3D render body with seeds, "
+            "s to save masks for visualization elsewhere, "
             "q to quit..."
         )
         if s == "q":
             return
-        elif s == "r":
-            skel.render_skeleton()
         elif s == "rs":
+            skel.render_skeleton()
+        elif s == "r":
+            skel.render_large_skeleton()
+        elif s == "s":
             s = raw_input("Please enter the desired file name:\n")
             skel.save_skeleton_masks(s)
         elif s == "ra":
