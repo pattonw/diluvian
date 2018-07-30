@@ -200,6 +200,10 @@ class Skeleton(object):
         """
         get the intersections of neighboring reagions in the tree.
         Very useful for determining location of false merges.
+
+        WIP:
+        currently also returns masks of same size as skeleton for positioning.
+        Should return masks only of necessary size along with starting coords.
         """
         for parent in self.tree.traverse():
             for child in parent.children:
@@ -246,12 +250,19 @@ class Skeleton(object):
                 yield mask
 
     def save_skeleton_masks(self, output_file, show_seeds=True):
+        """
+        save skeleton masks to a file for rendering elsewhere
+        """
         output = []
         for mask, seed_mask in self.get_masks(show_seeds):
             output.append((mask, seed_mask))
         np.save(output_file, output)
 
     def render_skeleton(self, show_seeds=True, with_intersections=False):
+        """
+        render each region of a skeleton individually with their seed points and color them
+        accordingly. Optionally create a second image with the intersections.
+        """
         from mayavi import mlab
 
         fig = mlab.figure(size=(1280, 720))
@@ -293,6 +304,9 @@ class Skeleton(object):
         mlab.show()
     
     def render_large_skeleton(self):
+        """
+        Render the entire skeleton, ignoring individual sections and seed points.
+        """
         from mayavi import mlab
 
         fig = mlab.figure(size=(1280, 720))
@@ -310,10 +324,25 @@ class Skeleton(object):
         mlab.show()
 
     class SkeletonTree:
+        """
+        The skeleton tree class is a pretty standard tree data structure.
+        The tree has a root node from which it can iterate of all of its nodes.
+        """
         def __init__(self):
+            """
+            Initialize an empty tree
+            """
             self.root = None
 
         def add_region(self, node):
+            """
+            add a region to the tree.
+
+            WIP:
+            Currently any node to be added must either be a parent or a child of
+            nodes already in the tree. Does not yet support building the tree 
+            with arbitrary node input order.
+            """
             if self.root is None:
                 self.root = node
                 return True
@@ -325,6 +354,9 @@ class Skeleton(object):
                 return self.root.append_child(node)
 
         def fill(self, orig_bounds, body):
+            """
+            Fill in an existing node with data from flood filling.
+            """
             for node in self.traverse():
                 if node.id == orig_bounds.node_id[0]:
                     if node.body is not None:
@@ -343,16 +375,31 @@ class Skeleton(object):
             raise Exception("node {0} not found".format(nid))
 
         def dump_tree(self):
+            """
+            Get a string representation of the tree
+            """
             return str(self.root)
 
         def traverse(self):
+            """
+            Iterate over the elements of the tree
+            """
             if self.root is None:
                 print("NO ROOTS")
             else:
                 return self.root.traverse()
 
     class RegionNode:
+        """
+        The RegionNode goes along with the SkeletonTree
+
+        Each node contains information about the region it represents such as bounds
+        and the flood filled mask.
+        """
         def __init__(self, region=None, children=None, node=None):
+            """
+            initialize a node with either a region or a node
+            """
             self.body = None
             self.bounds = None
             if node is not None:
@@ -372,6 +419,9 @@ class Skeleton(object):
                 self.children = []
 
         def set_bounds(self, bounds):
+            """
+            set the bounds of a regionNode
+            """
             self.bounds = bounds
 
         def append_child(self, regionNode):
