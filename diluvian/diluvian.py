@@ -857,7 +857,6 @@ def fill_skeleton_with_model_threaded(
                 processed_nodes += queue_next_node()
 
         logging.debug("Processing node at %s", np.array_str(node))
-        pbar.set_description("Node " + np.array_str(node))
         pbar.update(processed_nodes)
 
         if skel.is_filled(node[0]):
