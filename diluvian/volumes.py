@@ -115,7 +115,7 @@ class Subvolume(object):
     """A subvolume of image data and an optional ground truth object mask."""
     __slots__ = ('image', 'label_mask', 'seed', 'label_id','bounds',)
 
-    def __init__(self, image, label_mask, seed, label_id, bounds):
+    def __init__(self, image, label_mask, seed, label_id, bounds = None):
         self.image = image
         self.label_mask = label_mask
         self.seed = seed
@@ -190,7 +190,7 @@ class SubvolumeGenerator(six.Iterator):
         self.bounds_generator.reset()
 
     def __next__(self):
-        return self.volume.get_subvolume(six.next(self.bounds_generator))
+        return self.volume.get_subvolume(next(self.bounds_generator))
 
 
 class ErodedMaskGenerator(six.Iterator):
@@ -822,6 +822,10 @@ class Volume(object):
 
                 yield SubvolumeBounds(start, stop, label_id=label_id, label_margin=self.label_margin, node_id=node_id)
 
+        
+        def __next__(self):
+            return next(self.__iter__())
+
         def reset(self):
             self.random.seed(0)
 
@@ -921,13 +925,13 @@ class PartitionedVolume(VolumeView):
 
     def local_to_parent(self, a):
         logging.debug("PartitionVolume local to parent")
-        logging.debug("partitioned coords: (%s)\nparent coords: (%s)"%(str(a), str(a - self.bounds[0])))
-        return a - self.bounds[0]
+        logging.debug("partitioned coords: (%s)\nparent coords: (%s)"%(str(a), str(a + self.bounds[0])))
+        return a + self.bounds[0]
 
     def parent_to_local(self, a):
         logging.debug("PartitionVolume parent to local")
-        logging.debug("partitioned coords: (%s)\nparent coords: (%s)"%(str(a + self.bounds[0]), str(a)))
-        return a + self.bounds[0]
+        logging.debug("partitioned coords: (%s)\nparent coords: (%s)"%(str(a - self.bounds[0]), str(a)))
+        return a - self.bounds[0]
 
     @property
     def mask_bounds(self):

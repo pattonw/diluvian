@@ -33,7 +33,7 @@ class Skeleton(object):
     skeleton.
     """
 
-    def __init__(self, id_pairs):
+    def __init__(self, id_pairs = None):
         """
         initialize a new Skeleton with a list of id_pairs.
         each id_pair is a tuple (id, parent_id)
@@ -42,7 +42,8 @@ class Skeleton(object):
         self.tree = self.SkeletonTree()
         self.start = [float("inf"), float("inf"), float("inf")]
         self.stop = [0, 0, 0]
-        self.outline_from_pairs(id_pairs)
+        if id_pairs is not None:
+            self.outline_from_pairs(id_pairs)
 
     def get_bounds(self):
         """
@@ -84,14 +85,7 @@ class Skeleton(object):
 
     def get_masks(self):
         """
-        returns masks and seed masks for each individual section that has been filled.
-        This is useful for visualizations but very slow on large skeletons.
-
-        WIP: currently creates a numpy array of the same size as the whole skeleton
-        for each mask so that masks can be rendered in the same image with correct
-        relative positioning.
-        Instead mask array should only be as large as necessary and save its starting
-        coordinates to be hugely more efficient.
+        returns masks and bounds for each node
         """
         for node in self.tree.traverse():
             if node.has_volume():
@@ -106,9 +100,8 @@ class Skeleton(object):
 
     def get_skeleton_mask(self):
         """
-        get one big mask for the entire skeleton, ignoring individual sections
-        and seeds. Much more efficient and saves on a lot of memory and computation
-        time.
+        get one big mask for the entire skeleton, very inefficient for large
+        volumes
         """
         start, stop = self.get_bounds()
         self.skeleton_mask = np.zeros(stop - start)
@@ -148,25 +141,20 @@ class Skeleton(object):
         """
         get the intersections of neighboring reagions in the tree.
         Very useful for determining location of false merges.
-
-        WIP:
-        currently also returns masks of same size as skeleton for positioning.
-        Should return masks only of necessary size along with starting coords.
         """
         for parent in self.tree.traverse():
             for child in parent.children:
-                parent_mask, _ = parent.body.get_seeded_component(
-                    CONFIG.postprocessing.closing_shape
-                )
-                child_mask, _ = child.body.get_seeded_component(
-                    CONFIG.postprocessing.closing_shape
-                )
+                parent_mask, parent_bound = getMask(parent)
+                child_mask, child_bound = getMask(child)
+
+                if parent_mask is None or child_mask is None:
+                    continue
 
                 int_start = [
-                    max(parent.bounds.start[i], child.bounds.start[i]) for i in range(3)
+                    max(parent_bound.start[i], child_bound.start[i]) for i in range(3)
                 ]
                 int_stop = [
-                    min(parent.bounds.stop[i], child.bounds.stop[i]) for i in range(3)
+                    min(parent_bound.stop[i], child_bound.stop[i]) for i in range(3)
                 ]
                 int_mask = np.zeros(np.array(int_stop) - np.array(int_start))
 
@@ -177,10 +165,12 @@ class Skeleton(object):
                     + child_mask[
                         list(map(slice, np.array(int_start), np.array(int_stop)))
                     ]
-                )
-                int_mask = int_mask // 2
+                ) // 2
 
-                yield int_mask, int_start
+                if np.sum(int_mask) == 0:
+                    continue
+
+                yield int_mask, int_start, (parent.key, child.key)
 
     def save_skeleton_mask(self, output_file):
         """
@@ -197,8 +187,7 @@ class Skeleton(object):
 
     def render_skeleton(self, show_seeds=True, with_intersections=False):
         """
-        render each region of a skeleton individually with their seed points and color them
-        accordingly. Optionally create a second image with the intersections.
+        TODO.
         """
         from mayavi import mlab
 
