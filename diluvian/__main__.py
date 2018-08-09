@@ -329,8 +329,7 @@ def main():
                                move_batch_size=args.move_batch_size,
                                max_moves=args.max_moves,
                                remask_interval=args.remask_interval,
-                               moves=args.bounds_num_moves,
-                               save_output=args.save_output)
+                               moves=args.bounds_num_moves)
 
     elif args.command == 'validate':
         # Late import to prevent loading large modules for short CLI commands.
@@ -410,7 +409,8 @@ def main():
                                 move_batch_size=args.move_batch_size,
                                 max_moves=args.max_moves,
                                 remask_interval=args.remask_interval,
-                                moves=args.bounds_num_moves)
+                                moves=args.bounds_num_moves,
+                                save_output=args.save_output)
 
 
 def load_volumes(volume_files, in_memory, name_regex=None):
