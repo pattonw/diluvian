@@ -220,7 +220,7 @@ def _make_main_parser():
             help='Seed periodically allong skeleton to look for false merges and missed branches.')
     skeleton_fill_parser.add_argument(
             'skeleton_file', default=None,
-            help='File containing the skeleton for validation. Currently supports JSON file types.')
+            help='File containing the skeleton for validation. Currently supports csv file types.')
 
 
     p_skeleton_fill_parser = commandparsers.add_parser(
@@ -228,7 +228,10 @@ def _make_main_parser():
             help='Seed periodically allong skeleton to look for false merges and missed branches.')
     p_skeleton_fill_parser.add_argument(
             'skeleton_file', default=None,
-            help='File containing the skeleton for validation. Currently supports JSON file types.')
+            help='File containing the skeleton for validation. Currently supports csv file types.')
+    p_skeleton_fill_parser.add_argument(
+            '-s', action='store_true', dest='save_output', default=False,
+            help='save the mask data for rendering.')
     return parser
 
 
@@ -326,7 +329,8 @@ def main():
                                move_batch_size=args.move_batch_size,
                                max_moves=args.max_moves,
                                remask_interval=args.remask_interval,
-                               moves=args.bounds_num_moves)
+                               moves=args.bounds_num_moves
+                               save_output=args.save_output)
 
     elif args.command == 'validate':
         # Late import to prevent loading large modules for short CLI commands.

@@ -633,6 +633,7 @@ def fill_skeleton_with_model_threaded(
     worker_prequeue=1,
     reject_early_termination=False,
     reject_non_seed_components=True,
+    save_output=False,
 ):
     def worker(
         worker_id,
@@ -903,7 +904,10 @@ def fill_skeleton_with_model_threaded(
 
     pbar.close()
 
-    while True:
+    if save_output:
+        skel.save_skeleton_masks('output_file')
+
+    while not save_output:
         s = raw_input(
             "Press Enter to continue, "
             "r to 3D render body, "
@@ -932,11 +936,6 @@ def fill_skeleton_with_model_threaded(
                 )
         else:
             break
-
-    # I will want to view the results for the full skeleton, not individual sections of it
-    while True:
-        print("Visualizations to be implemented")
-        break
 
 
 def fill_skeleton_with_model(
