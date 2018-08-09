@@ -329,7 +329,7 @@ def main():
                                move_batch_size=args.move_batch_size,
                                max_moves=args.max_moves,
                                remask_interval=args.remask_interval,
-                               moves=args.bounds_num_moves
+                               moves=args.bounds_num_moves,
                                save_output=args.save_output)
 
     elif args.command == 'validate':
