@@ -90,6 +90,64 @@ class Skeleton(object):
                 continue
             yield (mask, bounds)
 
+    def get_disconnected_masks(self):
+        """
+        returns masks and bounds for each node
+        """
+        def intersects(bound_a, bound_b):
+            def f(a, A, b, B, i): 
+                k = 6 if i == 0 else 32
+                a = a + k
+                b = b + k
+                A = A - k
+                B = B - k
+                return a <= b <= A or a <= B <= A or b <= a <= B or b <= A <= B
+            intersections = [
+                f(bound_a[0][i], bound_a[1][i], bound_b[0][i], bound_b[1][i], i) for i in range(3)
+            ]
+            if all(intersections):
+                return True
+            else:
+                return False
+
+        def combine(mask, bound, i_mask, i_bound):
+            new_start = np.array([min(bound[0][i], i_bound[0][i]) for i in range(3)])
+            new_stop = np.array([max(bound[1][i], i_bound[1][i]) for i in range(3)])
+            combined = np.zeros(np.array(new_stop) - np.array(new_start))
+            combined[list(map(slice, i_bound[0] - new_start, i_bound[1] - new_start))] = i_mask
+            combined[list(map(slice, bound[0] - new_start, bound[1] - new_start))] = np.maximum(
+                combined[list(map(slice, bound[0] - new_start, bound[1] - new_start))], mask
+            )
+            return (combined, (new_start, new_stop))
+
+        done = False
+        masks, bounds = [], []
+        for mask in self.get_masks():
+            masks.append(mask[0])
+            bounds.append(mask[1])
+
+        while not done:
+            temp_masks = []
+            temp_bounds = []
+            done = True
+            for i in range(len(masks)):
+                mask = masks[i]
+                bound = bounds[i]
+                combined = False
+                for j in range(len(temp_masks)):
+                    if not combined and intersects(bound, temp_bounds[j]):
+                        done = False
+                        mask, bound = combine(mask, bound, temp_masks[j], temp_bounds[j])
+                        temp_masks[j] = mask
+                        temp_bounds[j] = bound
+                        combined = True
+                if not combined:
+                    temp_masks.append(mask)
+                    temp_bounds.append(bound)
+            masks = temp_masks
+            bounds = temp_bounds
+        return zip(masks, bounds)
+
     def get_skeleton_mask(self):
         """
         get one big mask for the entire skeleton, very inefficient for large
@@ -179,26 +237,16 @@ class Skeleton(object):
     def save_skeleton_mask_mesh(self, output_file):
         all_verts = []
         all_faces = []
-        masks = []
         for x in self.get_masks():
             mask = np.pad(x[0], ((1,), (1,), (1,)), "constant", constant_values=(0,))
-            masks.append(mask)
             verts, faces, normals, values = measure.marching_cubes_lewiner(mask, 0.5)
             verts = [[v[i] + x[1][0][i] - 1 for i in range(3)] for v in verts]
-            faces = [[f[i] + len(all_verts) for i in range(3)] for f in faces
-            ]
+            faces = [[f[i] + len(all_verts) for i in range(3)] for f in faces]
             for v in verts:
                 all_verts.append(v)
             for f in faces:
                 all_faces.append(f)
-        np.save(
-            output_file,
-            [
-                all_verts,
-                all_faces,
-                masks,
-            ],
-        )
+        np.save(output_file, [all_verts, all_faces])
 
     def render_skeleton(self, show_seeds=True, with_intersections=False):
         """
