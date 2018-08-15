@@ -3,22 +3,14 @@
 
 from __future__ import division
 
-import itertools
 import logging
 from collections import deque
+from skimage import measure
 
-import matplotlib.animation as animation
-import matplotlib.pyplot as plt
 import numpy as np
 import random
-import six
-from six.moves import queue
-from tqdm import tqdm
 
 from .config import CONFIG
-from .octrees import OctreeVolume
-from .postprocessing import Body
-from .util import get_color_shader, pad_dims, WrappedViewer
 
 
 class Skeleton(object):
@@ -29,11 +21,11 @@ class Skeleton(object):
 
     Note, the skeleton object only deals with coordinates in the
     output space. So if there was any downsampling, make sure all
-    coordinates are properly scaled before being passed to the 
+    coordinates are properly scaled before being passed to the
     skeleton.
     """
 
-    def __init__(self, id_pairs = None):
+    def __init__(self, id_pairs=None):
         """
         initialize a new Skeleton with a list of id_pairs.
         each id_pair is a tuple (id, parent_id)
@@ -77,7 +69,7 @@ class Skeleton(object):
     def outline_from_pairs(self, pairs):
         """
         This method takes a list of nodes with their coordinates and a shape vector.
-        Each nodes coordinate is assumed to be the desired seed point of a volume of the 
+        Each nodes coordinate is assumed to be the desired seed point of a volume of the
         desired shape centered on the given node. This is used to build the tree structure
         before starting flood filling.
         """
@@ -93,7 +85,7 @@ class Skeleton(object):
                     CONFIG.postprocessing.closing_shape
                 )
                 bounds = node.get_bounds()
-                id = node.key
+                # id = node.key
             else:
                 continue
             yield (mask, bounds)
@@ -144,8 +136,8 @@ class Skeleton(object):
         """
         for parent in self.tree.traverse():
             for child in parent.children:
-                parent_mask, parent_bound = getMask(parent)
-                child_mask, child_bound = getMask(child)
+                parent_mask, parent_bound = parent.get_mask()
+                child_mask, child_bound = child.get_mask()
 
                 if parent_mask is None or child_mask is None:
                     continue
@@ -184,6 +176,29 @@ class Skeleton(object):
             output.append(x)
         np.save(output_file, output)
 
+    def save_skeleton_mask_mesh(self, output_file):
+        all_verts = []
+        all_faces = []
+        masks = []
+        for x in self.get_masks():
+            mask = np.pad(x[0], ((1,), (1,), (1,)), "constant", constant_values=(0,))
+            masks.append(mask)
+            verts, faces, normals, values = measure.marching_cubes_lewiner(mask, 0.5)
+            verts = [[v[i] + x[1][0][i] - 1 for i in range(3)] for v in verts]
+            faces = [[f[i] + len(all_verts) for i in range(3)] for f in faces
+            ]
+            for v in verts:
+                all_verts.append(v)
+            for f in faces:
+                all_faces.append(f)
+        np.save(
+            output_file,
+            [
+                all_verts,
+                all_faces,
+                masks,
+            ],
+        )
 
     def render_skeleton(self, show_seeds=True, with_intersections=False):
         """
@@ -291,8 +306,7 @@ class Skeleton(object):
             if x:
                 return x.set_data(bounds, body)
             else:
-                raise Exception("node {0} not found".format(nid))
-            
+                raise Exception("node {0} not found".format(key))
 
         def dump_tree(self):
             """
@@ -315,7 +329,6 @@ class Skeleton(object):
             else:
                 return self.breadth_first_traversal()
 
-            
         def breadth_first_traversal(self):
             queue = deque([self.root])
 
@@ -360,19 +373,24 @@ class Skeleton(object):
             def get_body(self):
                 return self.value["body"]
 
+            def get_mask(self):
+                return self.value["body"].body.get_seeded_component(
+                    CONFIG.postprocessing.closing_shape
+                )
+
             def set_data(self, bounds, body):
                 self.set_bounds(bounds)
                 self.set_body(body)
-                self.value['is_filled'] = True
+                self.value["is_filled"] = True
                 try:
                     node_mask, _ = body.get_seeded_component(
                         CONFIG.postprocessing.closing_shape
                     )
-                    self.value['has_volume'] = True
+                    self.value["has_volume"] = True
                     return True
                 except Exception as e:
                     logging.debug(e)
-                    self.value['has_volume'] = False
+                    self.value["has_volume"] = False
                     return False
 
             def append_child(self, child):
@@ -388,10 +406,10 @@ class Skeleton(object):
                     return None
 
             def is_filled(self):
-                return self.value['is_filled']
+                return self.value["is_filled"]
 
             def has_volume(self):
-                return self.value['has_volume']
+                return self.value["has_volume"]
 
             def is_equal(self, node):
                 return node.key == self.key
@@ -409,4 +427,3 @@ class Skeleton(object):
                     )
                 else:
                     return str(self.key)
-

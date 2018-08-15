@@ -886,7 +886,6 @@ def fill_skeleton_with_model_threaded(
             logging.debug("Body is empty.")
 
         logging.debug("Adding body to prediction label volume.")
-        bounds_shape = list(map(slice, bounds[0], bounds[1]))
 
         orig_bounds = SubvolumeBounds(
             start=node[2:] - np.floor_divide(region_shape, 2),
@@ -905,7 +904,7 @@ def fill_skeleton_with_model_threaded(
     pbar.close()
 
     if save_output:
-        skel.save_skeleton_masks('output_file')
+        skel.save_skeleton_mask_mesh('output_file')
 
     while not save_output:
         s = raw_input(
@@ -923,7 +922,7 @@ def fill_skeleton_with_model_threaded(
             skel.render_large_skeleton()
         elif s == "s":
             s = raw_input("Please enter the desired file name:\n")
-            skel.save_skeleton_masks(s)
+            skel.save_skeleton_mask_mesh(s)
         elif s == "ra":
             for body in regions:
                 region_copy = body.unfilled_copy()
@@ -1017,6 +1016,8 @@ def fill_skeleton_with_model(
             return
         elif s == "r":
             skel.render_skeleton()
+        elif s == "s":
+            skel.save_skeleton_mask_mesh("output_file")
         elif s == "ra":
             for region in regions:
                 region_copy = region.unfilled_copy()
