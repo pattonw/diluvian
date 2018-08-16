@@ -92,7 +92,7 @@ class Skeleton(object):
 
     def get_disjoint_masks(self):
         """
-        returns masks and bounds for each node
+        First combines intersecting masks before returning them
         """
         def intersects(bound_a, bound_b):
             def f(a, A, b, B, i): 
@@ -110,13 +110,13 @@ class Skeleton(object):
             else:
                 return False
 
-        def combine(mask, bound, i_mask, i_bound):
-            new_start = np.array([min(bound[0][i], i_bound[0][i]) for i in range(3)])
-            new_stop = np.array([max(bound[1][i], i_bound[1][i]) for i in range(3)])
+        def combine(mask_A, bound_A, mask_B, bound_B):
+            new_start = np.array([min(bound_A[0][i], bound_B[0][i]) for i in range(3)])
+            new_stop = np.array([max(bound_A[1][i], bound_B[1][i]) for i in range(3)])
             combined = np.zeros(np.array(new_stop) - np.array(new_start))
-            combined[list(map(slice, i_bound[0] - new_start, i_bound[1] - new_start))] = i_mask
-            combined[list(map(slice, bound[0] - new_start, bound[1] - new_start))] = np.maximum(
-                combined[list(map(slice, bound[0] - new_start, bound[1] - new_start))], mask
+            combined[list(map(slice, bound_B[0] - new_start, bound_B[1] - new_start))] = mask_B
+            combined[list(map(slice, bound_A[0] - new_start, bound_A[1] - new_start))] = np.maximum(
+                combined[list(map(slice, bound_A[0] - new_start, bound_A[1] - new_start))], mask_A
             )
             return (combined, (new_start, new_stop))
 
@@ -235,22 +235,6 @@ class Skeleton(object):
         np.save(output_file, output)
 
     def save_skeleton_mask_mesh(self, output_file):
-        all_verts = []
-        all_faces = []
-        for x in self.get_masks():
-            mask = np.pad(x[0], ((1,), (1,), (1,)), "constant", constant_values=(0,))
-            verts, faces, normals, values = measure.marching_cubes_lewiner(mask, 0.5)
-            verts = [[v[i] + x[1][0][i] - 1 for i in range(3)] for v in verts]
-            faces = [[f[i] + len(all_verts) for i in range(3)] for f in faces]
-            for v in verts:
-                all_verts.append(v)
-            for f in faces:
-                all_faces.append(f)
-            logging.info("Number of vertices: ({})".format(len(verts)))
-            logging.info("Number of faces: ({})".format(len(faces)))
-        logging.info("Total number of vertices: ({})".format(len(all_verts)))
-        logging.info("Total number of faces: ({})".format(len(all_faces)))
-
         all_verts = []
         all_faces = []
         for x in self.get_disjoint_masks():
