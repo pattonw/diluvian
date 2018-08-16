@@ -90,7 +90,7 @@ class Skeleton(object):
                 continue
             yield (mask, bounds)
 
-    def get_disconnected_masks(self):
+    def get_disjoint_masks(self):
         """
         returns masks and bounds for each node
         """
@@ -238,6 +238,22 @@ class Skeleton(object):
         all_verts = []
         all_faces = []
         for x in self.get_masks():
+            mask = np.pad(x[0], ((1,), (1,), (1,)), "constant", constant_values=(0,))
+            verts, faces, normals, values = measure.marching_cubes_lewiner(mask, 0.5)
+            verts = [[v[i] + x[1][0][i] - 1 for i in range(3)] for v in verts]
+            faces = [[f[i] + len(all_verts) for i in range(3)] for f in faces]
+            for v in verts:
+                all_verts.append(v)
+            for f in faces:
+                all_faces.append(f)
+            logging.info("Number of vertices: ({})".format(len(verts)))
+            logging.info("Number of faces: ({})".format(len(faces)))
+        logging.info("Number of vertices: ({})".format(len(all_verts)))
+        logging.info("Number of faces: ({})".format(len(all_faces)))
+
+        all_verts = []
+        all_faces = []
+        for x in self.get_disjoint_masks():
             mask = np.pad(x[0], ((1,), (1,), (1,)), "constant", constant_values=(0,))
             verts, faces, normals, values = measure.marching_cubes_lewiner(mask, 0.5)
             verts = [[v[i] + x[1][0][i] - 1 for i in range(3)] for v in verts]
