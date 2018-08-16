@@ -721,7 +721,6 @@ def fill_skeleton_with_model_threaded(
                 block_padding="reflect",
             )
             region.bias_against_merge = bias
-            early_termination = False
             try:
                 six.next(
                     region.fill(
@@ -733,7 +732,7 @@ def fill_skeleton_with_model_threaded(
                     )
                 )
             except Region.EarlyFillTermination:
-                early_termination = True
+                logging.debug("Worker %s: node %s failed to fill", worker_id, str(node))
             except StopIteration:
                 pass
             logging.debug("Worker %s: node %s filled", worker_id, str(node))
@@ -923,16 +922,6 @@ def fill_skeleton_with_model_threaded(
         elif s == "s":
             s = raw_input("Please enter the desired file name:\n")
             skel.save_skeleton_mask_mesh(s)
-        elif s == "ra":
-            for body in regions:
-                region_copy = body.unfilled_copy()
-                region_copy.fill_render(
-                    model,
-                    progress=True,
-                    move_batch_size=move_batch_size,
-                    max_moves=max_moves,
-                    remask_interval=remask_interval,
-                )
         else:
             break
 
@@ -1018,16 +1007,6 @@ def fill_skeleton_with_model(
             skel.render_skeleton()
         elif s == "s":
             skel.save_skeleton_mask_mesh("output_file")
-        elif s == "ra":
-            for region in regions:
-                region_copy = region.unfilled_copy()
-                region_copy.fill_render(
-                    model,
-                    progress=True,
-                    move_batch_size=move_batch_size,
-                    max_moves=max_moves,
-                    remask_interval=remask_interval,
-                )
         else:
             break
 
