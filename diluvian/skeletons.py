@@ -34,6 +34,7 @@ class Skeleton(object):
         self.tree = self.SkeletonTree()
         self.start = [float("inf"), float("inf"), float("inf")]
         self.stop = [0, 0, 0]
+        self.scale = {"shift": np.array([0, 0, 6050]), "scale": np.array([1, 4, 4])}
         if id_pairs is not None:
             self.outline_from_pairs(id_pairs)
 
@@ -94,16 +95,19 @@ class Skeleton(object):
         """
         First combines intersecting masks before returning them
         """
+
         def intersects(bound_a, bound_b):
-            def f(a, A, b, B, i): 
+            def f(a, A, b, B, i):
                 k = 6 if i == 0 else 32
                 a = a + k
                 b = b + k
                 A = A - k
                 B = B - k
                 return a <= b <= A or a <= B <= A or b <= a <= B or b <= A <= B
+
             intersections = [
-                f(bound_a[0][i], bound_a[1][i], bound_b[0][i], bound_b[1][i], i) for i in range(3)
+                f(bound_a[0][i], bound_a[1][i], bound_b[0][i], bound_b[1][i], i)
+                for i in range(3)
             ]
             if all(intersections):
                 return True
@@ -114,9 +118,16 @@ class Skeleton(object):
             new_start = np.array([min(bound_A[0][i], bound_B[0][i]) for i in range(3)])
             new_stop = np.array([max(bound_A[1][i], bound_B[1][i]) for i in range(3)])
             combined = np.zeros(np.array(new_stop) - np.array(new_start))
-            combined[list(map(slice, bound_B[0] - new_start, bound_B[1] - new_start))] = mask_B
-            combined[list(map(slice, bound_A[0] - new_start, bound_A[1] - new_start))] = np.maximum(
-                combined[list(map(slice, bound_A[0] - new_start, bound_A[1] - new_start))], mask_A
+            combined[
+                list(map(slice, bound_B[0] - new_start, bound_B[1] - new_start))
+            ] = mask_B
+            combined[
+                list(map(slice, bound_A[0] - new_start, bound_A[1] - new_start))
+            ] = np.maximum(
+                combined[
+                    list(map(slice, bound_A[0] - new_start, bound_A[1] - new_start))
+                ],
+                mask_A,
             )
             return (combined, (new_start, new_stop))
 
@@ -137,7 +148,9 @@ class Skeleton(object):
                 for j in range(len(temp_masks)):
                     if not combined and intersects(bound, temp_bounds[j]):
                         done = False
-                        mask, bound = combine(mask, bound, temp_masks[j], temp_bounds[j])
+                        mask, bound = combine(
+                            mask, bound, temp_masks[j], temp_bounds[j]
+                        )
                         temp_masks[j] = mask
                         temp_bounds[j] = bound
                         combined = True

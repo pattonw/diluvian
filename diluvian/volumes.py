@@ -482,8 +482,17 @@ class GaussianNoiseAugmentGenerator(SubvolumeAugmentGenerator):
         shape_xform[self.axis] = -1
 
         dim_size = 1 if self.axis == -1 else self.shape[self.axis]
-        mul_noise = np.random.normal(1.0, self.multiplicative, dim_size).astype(subv.image.dtype)
-        add_noise = np.random.normal(0.0, self.additive, dim_size).astype(subv.image.dtype)
+        if CONFIG.training.vary_noise:
+            m_shifter = (
+                np.random.uniform()
+            )  # ramdomly scale the multiplicative standard deviation to vary noise levels
+            a_shifter = (
+                np.random.uniform()
+            )  # randomly scale the addative standard deviation to vary noise levels
+        else:
+            m_shifter = a_shifter = 1
+        mul_noise = np.random.normal(1.0, m_shifter * self.multiplicative, dim_size).astype(subv.image.dtype)
+        add_noise = np.random.normal(0.0, a_shifter * self.additive, dim_size).astype(subv.image.dtype)
 
         subv = Subvolume(subv.image * mul_noise.reshape(shape_xform) + add_noise.reshape(shape_xform),
                          subv.label_mask,

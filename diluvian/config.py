@@ -184,7 +184,7 @@ class NetworkConfig(BaseConfig):
     resolution: sequence or ndarray of int
         The resolution of the input image data. This is necessary if you want
         to use "as_needed" for ``unet_downsampling_mode``
-        .
+    coord_layer: whether to include coordinate channels in the input
     """
     def __init__(self, settings):
         self.factory = str(settings.get('factory'))
@@ -204,6 +204,7 @@ class NetworkConfig(BaseConfig):
         self.unet_downsample_rate = np.array(settings.get('unet_downsample_rate', [1, 1, 1]))
         self.unet_downsample_mode = np.array(settings.get('unet_downsample_mode', "fixed_rate"))
         self.resolution = np.array(settings.get('resolution', [1, 1, 1]))
+        self.coord_layer = np.array(settings.get('coord_layer', True))
 
 
 class OptimizerConfig(BaseConfig):
@@ -315,6 +316,8 @@ class TrainingConfig(BaseConfig):
         keys, indicating an axis to perform data artifacting along, the
         probability to add artifacts to each plane in the axis, and the
         volume configuration file from which to draw artifacts, respectively.
+    vary_noise : scale the addition and multiplication noise randomly Uniform(0,1)
+        to generate varying levels of noise.
     """
     def __init__(self, settings):
         self.num_gpus = int(settings.get('num_gpus', 1))
@@ -350,6 +353,7 @@ class TrainingConfig(BaseConfig):
                 [{'axis': 0, 'prob': 0.05, 'scaling_mean': 0.5, 'scaling_std': 0.1,
                   'center_mean': 1.2, 'center_std': 0.2}])
         self.augment_artifacts = settings.get('augment_artifacts', [])
+        self.vary_noise = settings.get('vary_noise', False)
 
 
 class PostprocessingConfig(BaseConfig):
