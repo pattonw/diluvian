@@ -248,8 +248,8 @@ class Skeleton(object):
                 all_faces.append(f)
             logging.info("Number of vertices: ({})".format(len(verts)))
             logging.info("Number of faces: ({})".format(len(faces)))
-        logging.info("Number of vertices: ({})".format(len(all_verts)))
-        logging.info("Number of faces: ({})".format(len(all_faces)))
+        logging.info("Total number of vertices: ({})".format(len(all_verts)))
+        logging.info("Total number of faces: ({})".format(len(all_faces)))
 
         all_verts = []
         all_faces = []
@@ -264,8 +264,8 @@ class Skeleton(object):
                 all_faces.append(f)
             logging.info("Number of vertices: ({})".format(len(verts)))
             logging.info("Number of faces: ({})".format(len(faces)))
-        logging.info("Number of vertices: ({})".format(len(all_verts)))
-        logging.info("Number of faces: ({})".format(len(all_faces)))
+        logging.info("Total number of vertices: ({})".format(len(all_verts)))
+        logging.info("Total number of faces: ({})".format(len(all_faces)))
         np.save(output_file, [all_verts, all_faces])
 
     def render_skeleton(self, show_seeds=True, with_intersections=False):
