@@ -385,10 +385,9 @@ def fill_volume_with_model(
         label_pbar.set_description("Label {}".format(label_id))
         label_pbar.update(np.count_nonzero(label_shape))
         logging.info(
-            "Filled seed (%s) with %s voxels labeled %s.",
-            np.array_str(seed),
-            body_size,
-            label_id,
+            "Filled seed ({}) with {} voxels labeled {}.".format(
+                np.array_str(seed), body_size, label_id
+            )
         )
 
         if max_bodies and label_id >= max_bodies:
@@ -903,7 +902,7 @@ def fill_skeleton_with_model_threaded(
     pbar.close()
 
     if save_output:
-        skel.save_skeleton_mask_mesh('output_file')
+        skel.save_skeleton_mask_mesh("output_file")
 
     while not save_output:
         s = raw_input(
