@@ -135,7 +135,7 @@ def make_flood_fill_unet(input_fov_shape, output_fov_shape, network_config):
     ffn = concatenate([ffn, mask_input])
 
     if network_config.coord_layer:
-        ffn = CoordinateChannel3D(ffn)
+        ffn = CoordinateChannel3D()(ffn)
 
     # Note that since the Keras 2 upgrade strangely models with depth > 3 are
     # rejected by TF.
