@@ -204,7 +204,7 @@ class NetworkConfig(BaseConfig):
         self.unet_downsample_rate = np.array(settings.get('unet_downsample_rate', [1, 1, 1]))
         self.unet_downsample_mode = np.array(settings.get('unet_downsample_mode', "fixed_rate"))
         self.resolution = np.array(settings.get('resolution', [1, 1, 1]))
-        self.coord_layer = np.array(settings.get('coord_layer', True))
+        self.coord_layer = np.array(settings.get('coord_layer', False))
 
 
 class OptimizerConfig(BaseConfig):
