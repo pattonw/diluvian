@@ -636,20 +636,16 @@ def train_network(
     if tensorboard:
         callbacks.append(TensorBoard())
 
-    input("Next stop: generators\n")
-    training_generator = Roundrobin(*training.data, name='training outer')
-    validation_generator = Roundrobin(*validation.data, name='validation outer')
-
-    input("about to start training, any last words?")
+    input("about to fit, any last words?\n")
 
     history = ffn.fit_generator(
-            training_generator,
+            Roundrobin(*training.data, name='training outer'),
             steps_per_epoch=training.steps_per_epoch,
             epochs=CONFIG.training.total_epochs,
             max_queue_size=len(training.gens) - 1,
             workers=1,
             callbacks=callbacks,
-            validation_data=validation_generator,
+            validation_data=Roundrobin(*validation.data, name='validation outer'),
             validation_steps=validation.steps_per_epoch)
 
     write_keras_history_to_csv(history, model_output_filebase + '.csv')
