@@ -636,6 +636,8 @@ def train_network(
     if tensorboard:
         callbacks.append(TensorBoard())
 
+    input("about to fit, any last words?\n")
+
     history = ffn.fit_generator(
             Roundrobin(*training.data, name='training outer'),
             steps_per_epoch=training.steps_per_epoch,
