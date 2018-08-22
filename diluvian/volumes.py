@@ -932,9 +932,11 @@ class Volume(object):
                     start_local = self.volume.world_coord_to_local(
                         start + self.label_margin
                     )
+                    start_local = start + self.label_margin
                     stop_local = self.volume.world_coord_to_local(
                         stop - self.label_margin
                     )
+                    stop_local = stop - self.label_margin
                     logging.debug("start: {} - {} :stop\nshape: {}".format(start, stop, stop-start))
                     logging.debug("start_local: {} - {} :stop_local\nshape: {}".format(start_local, stop_local, stop_local-start_local))
                     mask = self.volume.mask_data[
