@@ -910,78 +910,77 @@ class Volume(object):
 
         def __iter__(self):
             while True:
-                while True:
-                    if not self.seeds:
-                        ctr = np.array(
-                            [
-                                self.random.randint(self.ctr_min[n], self.ctr_max[n])
-                                for n in range(3)
-                            ]
-                        ).astype(np.int64)
-                    else:
-                        ctr = self.volume.world_coord_to_local(next(self.seeds))
-                    start = ctr - self.margin
-                    stop = ctr + self.margin + np.mod(self.shape, 2).astype(np.int64)
-
-                    node_id = None
-                    if self.ids:
-                        node_id = next(self.ids)
-
-                    # If the volume has a mask channel, only accept subvolumes
-                    # entirely contained in it.
-                    if self.volume.mask_data is not None:
-                        start_local = self.volume.world_coord_to_local(
-                            start + self.label_margin
-                        )
-                        stop_local = self.volume.world_coord_to_local(
-                            stop - self.label_margin
-                        )
-                        mask = self.volume.mask_data[
-                            start_local[0] : stop_local[0],
-                            start_local[1] : stop_local[1],
-                            start_local[2] : stop_local[2],
+                if not self.seeds:
+                    ctr = np.array(
+                        [
+                            self.random.randint(self.ctr_min[n], self.ctr_max[n])
+                            for n in range(3)
                         ]
-                        if not mask.all():
-                            logging.debug("Skipping subvolume not entirely in mask.")
-                            continue
+                    ).astype(np.int64)
+                else:
+                    ctr = self.volume.world_coord_to_local(next(self.seeds))
+                start = ctr - self.margin
+                stop = ctr + self.margin + np.mod(self.shape, 2).astype(np.int64)
 
-                    # Skip subvolumes with seeds in blank sections.
-                    if self.skip_blank_sections and self.volume.image_data is not None:
-                        if (
-                            self.volume.image_data[
-                                tuple(self.volume.local_coord_to_world(ctr))
-                            ]
-                            == 0
-                        ):
-                            logging.debug(
-                                "Skipping subvolume with seed in blank section."
-                            )
-                            continue
+                node_id = None
+                if self.ids:
+                    node_id = next(self.ids)
 
-                    # Only accept subvolumes where the central seed voxel will be
-                    # of a uniform label after downsampling. For more stringent
-                    # seed region uniformity filtering, see has_uniform_seed_margin.
-                    if self.volume.label_data is None:
-                        label_id = None
-                        break
-                    seed_min = self.volume.local_coord_to_world(ctr)
-                    seed_max = self.volume.local_coord_to_world(ctr + 1)
-                    label_ids = self.volume.label_data[
-                        seed_min[0] : seed_max[0],
-                        seed_min[1] : seed_max[1],
-                        seed_min[2] : seed_max[2],
+                # If the volume has a mask channel, only accept subvolumes
+                # entirely contained in it.
+                if self.volume.mask_data is not None:
+                    start_local = self.volume.world_coord_to_local(
+                        start + self.label_margin
+                    )
+                    stop_local = self.volume.world_coord_to_local(
+                        stop - self.label_margin
+                    )
+                    logging.debug("start: {} - {} :stop\nshape: {}".format(start, stop, stop-start))
+                    logging.debug("start_local: {} - {} :stop_local\nshape: {}".format(start_local, stop_local, stop_local-start_local))
+                    mask = self.volume.mask_data[
+                        start_local[0] : stop_local[0],
+                        start_local[1] : stop_local[1],
+                        start_local[2] : stop_local[2],
                     ]
-                    if (label_ids == label_ids.item(0)).all():
-                        label_id = label_ids.item(0)
-                        break
+                    if not mask.all():
+                        logging.debug("Skipping subvolume not entirely in mask.")
+                        continue
 
-                yield SubvolumeBounds(
-                    start,
-                    stop,
-                    label_id=label_id,
-                    label_margin=self.label_margin,
-                    node_id=node_id,
-                )
+                # Skip subvolumes with seeds in blank sections.
+                if self.skip_blank_sections and self.volume.image_data is not None:
+                    if (
+                        self.volume.image_data[
+                            tuple(self.volume.local_coord_to_world(ctr))
+                        ]
+                        == 0
+                    ):
+                        logging.debug("Skipping subvolume with seed in blank section.")
+                        continue
+
+                # Only accept subvolumes where the central seed voxel will be
+                # of a uniform label after downsampling. For more stringent
+                # seed region uniformity filtering, see has_uniform_seed_margin.
+                if self.volume.label_data is None:
+                    label_id = None
+                    break
+                seed_min = self.volume.local_coord_to_world(ctr)
+                seed_max = self.volume.local_coord_to_world(ctr + 1)
+                label_ids = self.volume.label_data[
+                    seed_min[0] : seed_max[0],
+                    seed_min[1] : seed_max[1],
+                    seed_min[2] : seed_max[2],
+                ]
+                if (label_ids == label_ids.item(0)).all():
+                    label_id = label_ids.item(0)
+                    break
+
+            yield SubvolumeBounds(
+                start,
+                stop,
+                label_id=label_id,
+                label_margin=self.label_margin,
+                node_id=node_id,
+            )
 
         def __next__(self):
             return next(self.__iter__())
