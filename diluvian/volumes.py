@@ -1454,11 +1454,13 @@ class ImageStackVolume(Volume):
         }[tile_source_parameters["tile_source_type"]].format(**tile_source_parameters)
         bounds = np.flipud(np.array(stack_info["bounds"], dtype=np.int64))
         resolution = np.flipud(np.array(stack_info["resolution"]))
+        translation = np.flipud(np.array(stack_info["translation"]))
         tile_width = int(tile_source_parameters["tile_width"])
         tile_height = int(tile_source_parameters["tile_height"])
         return ImageStackVolume(
             bounds,
             resolution,
+            translation,
             tile_width,
             tile_height,
             format_url,
@@ -1500,6 +1502,7 @@ class ImageStackVolume(Volume):
         self,
         bounds,
         orig_resolution,
+        translation,
         tile_width,
         tile_height,
         tile_format_url,
@@ -1509,6 +1512,7 @@ class ImageStackVolume(Volume):
     ):
         self.orig_bounds = bounds
         self.orig_resolution = orig_resolution
+        self.translation = translation
         self.tile_width = tile_width
         self.tile_height = tile_height
         self.tile_format_url = tile_format_url
@@ -1537,6 +1541,12 @@ class ImageStackVolume(Volume):
 
     def world_coord_to_local(self, a):
         return np.floor_divide(a, self.scale)
+
+    def real_coord_to_pixel(self, a):
+        return np.floor_divide(a - self.translation, self.orig_resolution)
+    
+    def pixel_coord_to_real(self, a):
+        return np.matmul(a, self.orig_resolution) + self.translation
 
     @property
     def resolution(self):
