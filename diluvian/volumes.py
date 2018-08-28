@@ -1468,8 +1468,6 @@ class ImageStackVolume(Volume):
         )
 
     def from_toml(filename):
-        from keras.utils.data_utils import get_file
-
         volumes = {}
         with open(filename, "rb") as fin:
             datasets = toml.load(fin).get("ImageStack", [])
@@ -1478,6 +1476,7 @@ class ImageStackVolume(Volume):
                 si = {
                     "dimensions": "bounds",
                     "resolution": "resolution",
+                    "translation": "translation",
                     "tile_width": "tile_width",
                     "tile_height": "tile_height",
                     "broken_slices": "broken_slices",
@@ -1544,7 +1543,7 @@ class ImageStackVolume(Volume):
 
     def real_coord_to_pixel(self, a):
         return np.floor_divide(a - self.translation, self.orig_resolution)
-    
+
     def pixel_coord_to_real(self, a):
         return np.matmul(a, self.orig_resolution) + self.translation
 
