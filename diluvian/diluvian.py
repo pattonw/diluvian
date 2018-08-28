@@ -632,7 +632,7 @@ def fill_skeleton_with_model_threaded(
     worker_prequeue=1,
     reject_early_termination=False,
     reject_non_seed_components=True,
-    save_output=False,
+    save_output_file=None,
 ):
     def worker(
         worker_id,
@@ -901,10 +901,10 @@ def fill_skeleton_with_model_threaded(
 
     pbar.close()
 
-    if save_output:
-        skel.save_skeleton_mask_mesh("output_file")
+    if save_output_file:
+        skel.save_skeleton_mask_mesh(save_output_file)
 
-    while not save_output:
+    while save_output_file is None:
         s = raw_input(
             "Press Enter to continue, "
             "r to 3D render body, "

@@ -937,8 +937,6 @@ class Volume(object):
                         stop - self.label_margin
                     )
                     stop_local = stop - self.label_margin
-                    logging.debug("start: {} - {} :stop\nshape: {}".format(start, stop, stop-start))
-                    logging.debug("start_local: {} - {} :stop_local\nshape: {}".format(start_local, stop_local, stop_local-start_local))
                     mask = self.volume.mask_data[
                         start_local[0] : stop_local[0],
                         start_local[1] : stop_local[1],
@@ -1464,7 +1462,7 @@ class ImageStackVolume(Volume):
             tile_width,
             tile_height,
             format_url,
-            missing_z=stack_info["broken_slices"],
+            missing_z=stack_info.get("broken_slices", None),
         )
 
     def from_toml(filename):
@@ -1474,6 +1472,7 @@ class ImageStackVolume(Volume):
         with open(filename, "rb") as fin:
             datasets = toml.load(fin).get("ImageStack", [])
             for dataset in datasets:
+                # stack info
                 si = {
                     "dimensions": "bounds",
                     "resolution": "resolution",
@@ -1481,6 +1480,7 @@ class ImageStackVolume(Volume):
                     "tile_height": "tile_height",
                     "broken_slices": "broken_slices",
                 }
+                # tile stack parameters
                 tsp = {
                     "image_base": "source_base_url",
                     "file_extension": "file_extension",
@@ -1533,13 +1533,9 @@ class ImageStackVolume(Volume):
         self.label_data = None
 
     def local_coord_to_world(self, a):
-        # logging.debug("Zoomed local to world")
-        # logging.debug("local coords: (%s) to (%s) :world coords"%(str(a), str(a)))
         return a
 
     def world_coord_to_local(self, a):
-        # logging.debug("Zoomed world to local")
-        # logging.debug("world coords: (%s) to (%s) :local coords"%(str(a), str(np.floor_divide(a, self.scale))))
         return np.floor_divide(a, self.scale)
 
     @property

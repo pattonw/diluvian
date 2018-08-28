@@ -21,6 +21,7 @@ class BaseConfig(object):
     String representation yields TOML that should parse back to a dictionary
     that will initialize the same configuration object.
     """
+
     def __str__(self):
         sanitized = {}
         for k, v in six.iteritems(self.__dict__):
@@ -43,9 +44,10 @@ class VolumeConfig(BaseConfig):
     label_downsampling : str
         Method for downsampling label masks. One of 'majority' or 'conjunction'.
     """
+
     def __init__(self, settings):
-        self.resolution = np.array(settings.get('resolution', [1, 1, 1]))
-        self.label_downsampling = str(settings.get('label_downsampling', 'majority'))
+        self.resolution = np.array(settings.get("resolution", [1, 1, 1]))
+        self.label_downsampling = str(settings.get("label_downsampling", "majority"))
 
 
 class ModelConfig(BaseConfig):
@@ -88,21 +90,28 @@ class ModelConfig(BaseConfig):
     validation_subv_shape : sequence or ndarray of int, optional
         Shape of the subvolumes used during training validation.
     """
+
     def __init__(self, settings):
-        self.input_fov_shape = np.array(settings.get('input_fov_shape', [17, 33, 33]))
-        self.output_fov_shape = np.array(settings.get('output_fov_shape', [17, 33, 33]))
-        self.output_fov_move_fraction = int(settings.get('output_fov_move_fraction', 4))
-        self.v_true = float(settings.get('v_true', 0.95))
-        self.v_false = float(settings.get('v_false', 0.05))
-        self.t_move = float(settings.get('t_move', 0.9))
-        self.t_final = float(settings.get('t_final', self.t_move))
-        self.move_check_thickness = int(settings.get('move_check_thickness', 1))
-        self.move_priority = str(settings.get('move_priority', 'descending'))
-        self.move_recheck = bool(settings.get('move_recheck', True))
-        self.training_subv_shape = np.array(settings.get('training_subv_shape',
-                                                         self.input_fov_shape + self.move_step * 2))
-        self.validation_subv_shape = np.array(settings.get('validation_subv_shape',
-                                                           self.input_fov_shape + self.move_step * 4))
+        self.input_fov_shape = np.array(settings.get("input_fov_shape", [17, 33, 33]))
+        self.output_fov_shape = np.array(settings.get("output_fov_shape", [17, 33, 33]))
+        self.output_fov_move_fraction = int(settings.get("output_fov_move_fraction", 4))
+        self.v_true = float(settings.get("v_true", 0.95))
+        self.v_false = float(settings.get("v_false", 0.05))
+        self.t_move = float(settings.get("t_move", 0.9))
+        self.t_final = float(settings.get("t_final", self.t_move))
+        self.move_check_thickness = int(settings.get("move_check_thickness", 1))
+        self.move_priority = str(settings.get("move_priority", "descending"))
+        self.move_recheck = bool(settings.get("move_recheck", True))
+        self.training_subv_shape = np.array(
+            settings.get(
+                "training_subv_shape", self.input_fov_shape + self.move_step * 2
+            )
+        )
+        self.validation_subv_shape = np.array(
+            settings.get(
+                "validation_subv_shape", self.input_fov_shape + self.move_step * 4
+            )
+        )
 
     @property
     def move_step(self):
@@ -175,36 +184,43 @@ class NetworkConfig(BaseConfig):
         other level, this value could be [2, 1, 1]. Axes set to 0 are never
         downsampled.
     unet_downsample_mode: string
-        The mode to use for downsampling. The two options are "fixed_rate", 
-        which will use the downsample rate previously defined, and "as_needed", 
+        The mode to use for downsampling. The two options are "fixed_rate",
+        which will use the downsample rate previously defined, and "as_needed",
         which will downsample on lower resolution axes until the volume is as
-        isotropic as possible. For example given a volume with resolution 
-        [40,4,4] and 4 unet layers, would downsample to 
+        isotropic as possible. For example given a volume with resolution
+        [40,4,4] and 4 unet layers, would downsample to
         [40,8,8],[40,16,16],[40,32,32],[80,64,64]
     resolution: sequence or ndarray of int
         The resolution of the input image data. This is necessary if you want
         to use "as_needed" for ``unet_downsampling_mode``
     coord_layer: whether to include coordinate channels in the input
     """
+
     def __init__(self, settings):
-        self.factory = str(settings.get('factory'))
-        self.transpose = bool(settings.get('transpose', False))
-        self.rescale_image = bool(settings.get('rescale_image', False))
-        self.num_modules = int(settings.get('num_modules', 8))
-        self.num_layers_per_module = int(settings.get('num_layers_per_module', 2))
-        self.convolution_dim = np.array(settings.get('convolution_dim', [3, 3, 3]))
-        self.convolution_filters = int(settings.get('convolution_filters', 32))
-        self.convolution_activation = str(settings.get('convolution_activation', 'relu'))
-        self.convolution_padding = str(settings.get('convolution_padding', 'same'))
-        self.initialization = str(settings.get('initialization', 'glorot_uniform'))
-        self.output_activation = str(settings.get('output_activation', 'sigmoid'))
-        self.dropout_probability = float(settings.get('dropout_probability', 0.0))
-        self.batch_normalization = bool(settings.get('batch_normalization', False))
-        self.unet_depth = int(settings.get('unet_depth', 4))
-        self.unet_downsample_rate = np.array(settings.get('unet_downsample_rate', [1, 1, 1]))
-        self.unet_downsample_mode = np.array(settings.get('unet_downsample_mode', "fixed_rate"))
-        self.resolution = np.array(settings.get('resolution', [1, 1, 1]))
-        self.coord_layer = np.array(settings.get('coord_layer', False))
+        self.factory = str(settings.get("factory"))
+        self.transpose = bool(settings.get("transpose", False))
+        self.rescale_image = bool(settings.get("rescale_image", False))
+        self.num_modules = int(settings.get("num_modules", 8))
+        self.num_layers_per_module = int(settings.get("num_layers_per_module", 2))
+        self.convolution_dim = np.array(settings.get("convolution_dim", [3, 3, 3]))
+        self.convolution_filters = int(settings.get("convolution_filters", 32))
+        self.convolution_activation = str(
+            settings.get("convolution_activation", "relu")
+        )
+        self.convolution_padding = str(settings.get("convolution_padding", "same"))
+        self.initialization = str(settings.get("initialization", "glorot_uniform"))
+        self.output_activation = str(settings.get("output_activation", "sigmoid"))
+        self.dropout_probability = float(settings.get("dropout_probability", 0.0))
+        self.batch_normalization = bool(settings.get("batch_normalization", False))
+        self.unet_depth = int(settings.get("unet_depth", 4))
+        self.unet_downsample_rate = np.array(
+            settings.get("unet_downsample_rate", [1, 1, 1])
+        )
+        self.unet_downsample_mode = np.array(
+            settings.get("unet_downsample_mode", "fixed_rate")
+        )
+        self.resolution = np.array(settings.get("resolution", [1, 1, 1]))
+        self.coord_layer = np.array(settings.get("coord_layer", False))
 
 
 class OptimizerConfig(BaseConfig):
@@ -221,12 +237,13 @@ class OptimizerConfig(BaseConfig):
     loss : str
         Name of the Keras loss function to use.
     """
+
     def __init__(self, settings):
         for k, v in six.iteritems(settings):
-            if k != 'klass' and k != 'loss':
+            if k != "klass" and k != "loss":
                 setattr(self, k, v)
-        self.klass = str(settings.get('klass', 'SGD'))
-        self.loss = str(settings.get('loss', 'binary_crossentropy'))
+        self.klass = str(settings.get("klass", "SGD"))
+        self.loss = str(settings.get("loss", "binary_crossentropy"))
 
 
 class TrainingConfig(BaseConfig):
@@ -311,7 +328,7 @@ class TrainingConfig(BaseConfig):
         and standard deviation to draw from a normal distribution to scale
         contrast, and the mean and standard deviation to draw from a normal
         distribution to move the intensity center multiplicatively.
-    augment_missing_data : list of dict
+    augment_artifacts : list of dict
         List of dictionaries with ``axis``, ``prob`` and ``volume_file``
         keys, indicating an axis to perform data artifacting along, the
         probability to add artifacts to each plane in the axis, and the
@@ -319,41 +336,69 @@ class TrainingConfig(BaseConfig):
     vary_noise : scale the addition and multiplication noise randomly Uniform(0,1)
         to generate varying levels of noise.
     """
+
     def __init__(self, settings):
-        self.num_gpus = int(settings.get('num_gpus', 1))
-        self.num_workers = int(settings.get('num_workers', 4))
-        self.gpu_batch_size = int(settings.get('gpu_batch_size', 8))
+        self.num_gpus = int(settings.get("num_gpus", 1))
+        self.num_workers = int(settings.get("num_workers", 4))
+        self.gpu_batch_size = int(settings.get("gpu_batch_size", 8))
         self.batch_size = self.num_gpus * self.gpu_batch_size
-        self.training_size = int(settings.get('training_size', 256))
-        self.validation_size = int(settings.get('validation_size', 256))
-        self.total_epochs = int(settings.get('total_epochs', 100))
-        self.reset_generators = bool(settings.get('reset_generators', False))
-        self.fill_factor_bins = settings.get('fill_factor_bins', None)
+        self.training_size = int(settings.get("training_size", 256))
+        self.validation_size = int(settings.get("validation_size", 256))
+        self.total_epochs = int(settings.get("total_epochs", 100))
+        self.reset_generators = bool(settings.get("reset_generators", False))
+        self.fill_factor_bins = settings.get("fill_factor_bins", None)
         if self.fill_factor_bins is not None:
             self.fill_factor_bins = np.array(self.fill_factor_bins)
-        self.partitions = settings.get('partitions', {'.*': [2, 1, 1]})
-        self.training_partition = settings.get('training_partition', {'.*': [0, 0, 0]})
-        self.validation_partition = settings.get('validation_partition', {'.*': [1, 0, 0]})
+        self.partitions = settings.get("partitions", {".*": [2, 1, 1]})
+        self.training_partition = settings.get("training_partition", {".*": [0, 0, 0]})
+        self.validation_partition = settings.get(
+            "validation_partition", {".*": [1, 0, 0]}
+        )
         self.validation_metric = settings.get(
-                'validation_metric',
-                {'metric': 'diluvian.util.binary_f_score', 'threshold': True, 'mode': 'max', 'args': {'beta': 0.5}})
-        self.patience = int(np.array(settings.get('patience', 10)))
-        self.early_abort_epoch = settings.get('early_abort_epoch', None)
-        self.early_abort_loss = settings.get('early_abort_loss', None)
-        self.label_erosion = np.array(settings.get('label_erosion', [0, 1, 1]), dtype=np.int64)
-        self.relabel_seed_component = bool(settings.get('relabel_seed_component', False))
-        self.augment_validation = bool(settings.get('augment_validation', True))
-        self.augment_use_both = bool(settings.get('augment_use_both', True))
-        self.augment_mirrors = [int(x) for x in settings.get('augment_mirrors', [0, 1, 2])]
-        self.augment_permute_axes = settings.get('augment_permute_axes', [[0, 2, 1]])
-        self.augment_missing_data = settings.get('augment_missing_data', [{'axis': 0, 'prob': 0.01}])
-        self.augment_noise = settings.get('augment_noise', [{'axis': 0, 'mul': 0.1, 'add': 0.1}])
+            "validation_metric",
+            {
+                "metric": "diluvian.util.binary_f_score",
+                "threshold": True,
+                "mode": "max",
+                "args": {"beta": 0.5},
+            },
+        )
+        self.patience = int(np.array(settings.get("patience", 10)))
+        self.early_abort_epoch = settings.get("early_abort_epoch", None)
+        self.early_abort_loss = settings.get("early_abort_loss", None)
+        self.label_erosion = np.array(
+            settings.get("label_erosion", [0, 1, 1]), dtype=np.int64
+        )
+        self.relabel_seed_component = bool(
+            settings.get("relabel_seed_component", False)
+        )
+        self.augment_validation = bool(settings.get("augment_validation", True))
+        self.augment_use_both = bool(settings.get("augment_use_both", True))
+        self.augment_mirrors = [
+            int(x) for x in settings.get("augment_mirrors", [0, 1, 2])
+        ]
+        self.augment_permute_axes = settings.get("augment_permute_axes", [[0, 2, 1]])
+        self.augment_missing_data = settings.get(
+            "augment_missing_data", [{"axis": 0, "prob": 0.01}]
+        )
+        self.augment_noise = settings.get(
+            "augment_noise", [{"axis": 0, "mul": 0.1, "add": 0.1}]
+        )
         self.augment_contrast = settings.get(
-                'augment_contrast',
-                [{'axis': 0, 'prob': 0.05, 'scaling_mean': 0.5, 'scaling_std': 0.1,
-                  'center_mean': 1.2, 'center_std': 0.2}])
-        self.augment_artifacts = settings.get('augment_artifacts', [])
-        self.vary_noise = settings.get('vary_noise', False)
+            "augment_contrast",
+            [
+                {
+                    "axis": 0,
+                    "prob": 0.05,
+                    "scaling_mean": 0.5,
+                    "scaling_std": 0.1,
+                    "center_mean": 1.2,
+                    "center_std": 0.2,
+                }
+            ],
+        )
+        self.augment_artifacts = settings.get("augment_artifacts", [])
+        self.vary_noise = settings.get("vary_noise", False)
 
 
 class PostprocessingConfig(BaseConfig):
@@ -364,8 +409,9 @@ class PostprocessingConfig(BaseConfig):
     closing_shape : sequence or ndarray of int
         Shape of the structuring element for morphological closing, in voxels.
     """
+
     def __init__(self, settings):
-        self.closing_shape = settings.get('closing_shape', None)
+        self.closing_shape = settings.get("closing_shape", None)
 
 
 class Config(object):
@@ -389,14 +435,14 @@ class Config(object):
         else:
             settings = {}
 
-        self.volume = VolumeConfig(settings.get('volume', {}))
-        self.model = ModelConfig(settings.get('model', {}))
-        self.network = NetworkConfig(settings.get('network', {}))
-        self.optimizer = OptimizerConfig(settings.get('optimizer', {}))
-        self.training = TrainingConfig(settings.get('training', {}))
-        self.postprocessing = PostprocessingConfig(settings.get('postprocessing', {}))
+        self.volume = VolumeConfig(settings.get("volume", {}))
+        self.model = ModelConfig(settings.get("model", {}))
+        self.network = NetworkConfig(settings.get("network", {}))
+        self.optimizer = OptimizerConfig(settings.get("optimizer", {}))
+        self.training = TrainingConfig(settings.get("training", {}))
+        self.postprocessing = PostprocessingConfig(settings.get("postprocessing", {}))
 
-        self.random_seed = int(settings.get('random_seed', 0))
+        self.random_seed = int(settings.get("random_seed", 0))
 
     def __str__(self):
         sanitized = {}
@@ -425,15 +471,16 @@ class Config(object):
         """
         settings = []
         for filename in filenames:
-            with open(filename, 'rb') as fin:
+            with open(filename, "rb") as fin:
                 settings.append(toml.load(fin))
 
         return self.__init__(settings)
 
     def to_toml(self, filename):
-        with open(filename, 'w') as tomlfile:
+        with open(filename, "w") as tomlfile:
             tomlfile.write(str(self))
 
 
 CONFIG = Config()
-CONFIG.from_toml(os.path.join(os.path.dirname(__file__), 'conf', 'default.toml'))
+CONFIG.from_toml(os.path.join(os.path.dirname(__file__), "conf", "default.toml"))
+
