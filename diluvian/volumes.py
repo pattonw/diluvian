@@ -1560,6 +1560,7 @@ class ImageStackVolume(Volume):
             return ImageStackVolume(
                 self.orig_bounds,
                 self.orig_resolution,
+                self.translation,
                 self.tile_width,
                 self.tile_height,
                 self.tile_format_url,
