@@ -460,9 +460,9 @@ class Config(object):
         self.server = ServerConfig(settings.get("server", {}))
 
         self.random_seed = int(settings.get("random_seed", 0))
-        self.input_resolution = [int(x) for x in settings.get("input_resolution", None)]
-        if self.input_resolution is not None:
-            self.volume.resolution = self.input_resolution
+        input_resolution = settings.get("input_resolution", None)
+        if input_resolution is not None:
+            self.volume.resolution = [int(x) for x in input_resolution]
 
     def __str__(self):
         sanitized = {}
