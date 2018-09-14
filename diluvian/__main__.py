@@ -571,7 +571,6 @@ def main():
         )
 
     elif args.command == "skeleton-fill-parallel":
-        print("validating skeleton")
 
         # Late import to prevent loading large modules for short CLI commands.
         init_seeds()
@@ -589,7 +588,6 @@ def main():
             remask_interval=args.remask_interval,
             moves=args.bounds_num_moves,
             save_output_file=args.results_file,
-            
         )
 
 

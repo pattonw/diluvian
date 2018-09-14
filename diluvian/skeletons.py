@@ -265,6 +265,10 @@ class Skeleton(object):
         logging.info("Total number of faces: ({})".format(len(all_faces)))
         np.save(output_file, [all_verts, all_faces])
 
+    def save_stats(self, output_file):
+        with open(output_file + ".csv", "w") as f:
+            f.write("results")
+
     def render_skeleton(self, show_seeds=True, with_intersections=False):
         """
         TODO.

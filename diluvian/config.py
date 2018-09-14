@@ -414,6 +414,22 @@ class PostprocessingConfig(BaseConfig):
         self.closing_shape = settings.get("closing_shape", None)
 
 
+class ServerConfig(BaseConfig):
+    """Configuration for the server running diluvian.
+
+    Attributes
+    ----------
+    gpus : sequence or ndarray of int
+        GPU ids to use for data-parallelism.
+    num_workers : int
+        Number of worker queues to use for generating training data.
+    """
+
+    def __init__(self, settings):
+        self.gpus = settings.get("gpus", None)
+        self.num_workers = int(settings.get("num_workers", 4))
+
+
 class Config(object):
     """A complete collection of configuration objects.
 
@@ -441,8 +457,12 @@ class Config(object):
         self.optimizer = OptimizerConfig(settings.get("optimizer", {}))
         self.training = TrainingConfig(settings.get("training", {}))
         self.postprocessing = PostprocessingConfig(settings.get("postprocessing", {}))
+        self.server = ServerConfig(settings.get("server", {}))
 
         self.random_seed = int(settings.get("random_seed", 0))
+        self.input_resolution = [int(x) for x in settings.get("input_resolution", None)]
+        if self.input_resolution is not None:
+            self.volume.resolution = self.input_resolution
 
     def __str__(self):
         sanitized = {}

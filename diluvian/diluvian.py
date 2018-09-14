@@ -758,7 +758,10 @@ def fill_skeleton_with_model_threaded(
     vol_name = list(volumes.keys())[0]
     volume = volumes[vol_name].downsample(CONFIG.volume.resolution)
     seeds, ids = seeds_from_skeleton(skeleton_file)
-    seeds = [list(volume.world_coord_to_local(volume.real_coord_to_pixel(seed))) for seed in seeds]
+    seeds = [
+        list(volume.world_coord_to_local(volume.real_coord_to_pixel(seed)))
+        for seed in seeds
+    ]
     nodes = [np.array(ids[i] + seeds[i]) for i in range(len(seeds))]
     skel = Skeleton(ids)
     region_shape = CONFIG.model.input_fov_shape
@@ -903,6 +906,7 @@ def fill_skeleton_with_model_threaded(
 
     if save_output_file:
         skel.save_skeleton_mask_mesh(save_output_file)
+        skel.save_stats(save_output_file)
 
     while save_output_file is None:
         s = raw_input(
