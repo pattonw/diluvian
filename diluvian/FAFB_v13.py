@@ -507,7 +507,7 @@ def run():
         remask_interval=None,
         sparse=False,
         moves=None,
-        num_workers=1,
+        num_workers=8,
         worker_prequeue=1,
         reject_early_termination=False,
         reject_non_seed_components=True,

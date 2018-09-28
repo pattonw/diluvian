@@ -89,7 +89,7 @@ class Skeleton(object):
                 # id = node.key
             else:
                 continue
-            yield (mask, bounds)
+            yield (mask, bounds, node.key, node.pid)
 
     def get_disjoint_masks(self):
         """
@@ -276,6 +276,7 @@ class Skeleton(object):
         """
         create many small meshes around each sample point of the skeleton.
         """
+        ids = []
         mesh_verts = []
         mesh_faces = []
         for x in self.get_masks():
@@ -284,7 +285,8 @@ class Skeleton(object):
             verts = [[v[i] + x[1][0][i] - 1 for i in range(3)] for v in verts]
             mesh_verts.append(verts)
             mesh_faces.append(faces)
-        np.save(output_file, [mesh_verts, mesh_faces])
+            ids.append(x[2])
+        np.save(output_file, [mesh_verts, mesh_faces, ids])
 
     def save_stats(self, output_file):
         """
@@ -427,8 +429,8 @@ class Skeleton(object):
                 )[0]
                 self.root = nodes[rootid]
 
-                #raise Exception("Root node was not in the list")
-                
+                # raise Exception("Root node was not in the list")
+
             if len([x for x in self.traverse()]) != len(pairs):
                 raise Exception(
                     "number of nodes in tree ({0}) does not match number of nodes given ({1})".format(
