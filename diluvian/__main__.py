@@ -389,6 +389,12 @@ def _make_main_parser():
         default=None,
         help="Filename for the storage of the floodfilling output data.",
     )
+
+    fafb_parser = commandparsers.add_parser(
+        "FAFB",
+        parents=[common_parser, fill_common_parser, bounds_common_parser],
+        help="Seed periodically allong skeleton to look for false merges and missed branches.",
+    )
     return parser
 
 
@@ -589,6 +595,13 @@ def main():
             moves=args.bounds_num_moves,
             save_output_file=args.results_file,
         )
+
+    elif args.command == "FAFB":
+
+        # Late import to prevent loading large modules for short CLI commands.
+        from .FAFB_v13 import run
+
+        run()
 
 
 def load_volumes(volume_files, in_memory, name_regex=None):
