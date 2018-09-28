@@ -492,7 +492,7 @@ def run():
 
     model_file = "trained_models/pattonw-v0/pattonw-v0.hdf5"
     skeleton_file = (
-        "/home/pattonw/Work/Catmaid/catmaid-database/FAFB_skeletons/77661.json"
+        "../tests/77661.json"
     )
     fill_skeleton_with_model_threaded(
         model_file,
