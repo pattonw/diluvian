@@ -93,7 +93,11 @@ class Skeleton(object):
 
     def get_disjoint_masks(self):
         """
-        First combines intersecting masks before returning them
+        First combines intersecting masks before returning them.
+        This is done by combining the binary arrays. Note that
+        this approach will become intractable for large connected
+        components. Thus it may be better to work with combining
+        the meshes themselves.
         """
 
         def intersects(bound_a, bound_b):
@@ -203,7 +207,7 @@ class Skeleton(object):
     def get_intersections(self):
         """
         get the intersections of neighboring reagions in the tree.
-        Very useful for determining location of false merges.
+        Useful for determining location of false merges.
         """
         for parent in self.tree.traverse():
             for child in parent.children:
@@ -237,7 +241,7 @@ class Skeleton(object):
 
     def save_skeleton_mask(self, output_file):
         """
-        save skeleton masks to a file for rendering elsewhere
+        save skeleton mask to a file for rendering elsewhere
         """
         np.save(output_file, self.get_skeleton_mask())
 
@@ -248,6 +252,9 @@ class Skeleton(object):
         np.save(output_file, output)
 
     def save_skeleton_mask_mesh(self, output_file):
+        """
+        Combine masks into one large mesh
+        """
         all_verts = []
         all_faces = []
         for x in self.get_disjoint_masks():
@@ -265,9 +272,51 @@ class Skeleton(object):
         logging.info("Total number of faces: ({})".format(len(all_faces)))
         np.save(output_file, [all_verts, all_faces])
 
+    def save_skeleton_mask_meshes(self, output_file):
+        """
+        create many small meshes around each sample point of the skeleton.
+        """
+        mesh_verts = []
+        mesh_faces = []
+        for x in self.get_masks():
+            mask = np.pad(x[0], ((1,), (1,), (1,)), "constant", constant_values=(0,))
+            verts, faces, normals, values = measure.marching_cubes_lewiner(mask, 0.5)
+            verts = [[v[i] + x[1][0][i] - 1 for i in range(3)] for v in verts]
+            mesh_verts.append(verts)
+            mesh_faces.append(faces)
+        np.save(output_file, [mesh_verts, mesh_faces])
+
     def save_stats(self, output_file):
+        """
+        Creates a csv of the form (id, pid, x, y, z, intersect) where:
+        -id is the nodes id,
+        -pid is the id of the nodes parent (own id if root),
+        -x is the x coordinate of a node
+        -y is the y coordinate of a node
+        -z is the z coordinate of a node
+        -intersect is whether a node's mask intersects with the mask of its parent.
+        """
         with open(output_file + ".csv", "w") as f:
-            f.write("results")
+            parent = self.root
+            node_queue = [self.root]
+            while len(node_queue) > 0:
+                current = node_queue.pop(0)
+                if parent is None:
+                    parent = current
+                f.write(
+                    "{},{},{},{},{},{}".format(
+                        current,
+                        parent,
+                        current.x,
+                        current.y,
+                        current.z,
+                        int(current.intersects(parent)),
+                    )
+                )
+                for child in current.get_children():
+                    node_queue.append(child)
+                parent = current
+                current = node_queue.pop(0)
 
     def render_skeleton(self, show_seeds=True, with_intersections=False):
         """
@@ -347,19 +396,39 @@ class Skeleton(object):
 
         def outline(self, pairs):
             nodes = {}
-            for id, pid in pairs:
-                nodes[id] = self.RegionNode(id)
-            for id, pid in pairs:
-                if (pid is None or id == pid) and self.root is None:
-                    self.root = nodes[id]
-                elif pid is None or id == pid:
+            for nid, pid in pairs:
+                nodes[nid] = self.RegionNode(nid, pid)
+            for nid, pid in pairs:
+                if (pid is None or nid == pid) and self.root is None:
+                    self.root = nodes[nid]
+                elif pid is None or nid == pid:
                     raise Exception("Multiple root nodes not supported")
                 else:
-                    child = nodes[id]
-                    parent = nodes[pid]
-                    parent.append_child(child)
+                    child = nodes[nid]
+                    if pid in nodes:
+                        parent = nodes[pid]
+                        parent.append_child(child)
             if self.root is None:
-                raise Exception("Root node was not in the list")
+                kid_counts = {}
+                for nid in nodes:
+                    current = nodes[nid]
+                    if nid in kid_counts:
+                        current.pid = None
+                        kid_counts[nid] += 1
+                    else:
+                        while current.pid in nodes:
+                            current = nodes[current.pid]
+                        if current.key in kid_counts:
+                            kid_counts[current.key] += 1
+                        else:
+                            kid_counts[current.key] = 1
+                rootid = max(
+                    [[nid, kid_counts[nid]] for nid in kid_counts], key=lambda x: x[1]
+                )[0]
+                self.root = nodes[rootid]
+
+                #raise Exception("Root node was not in the list")
+                
             if len([x for x in self.traverse()]) != len(pairs):
                 raise Exception(
                     "number of nodes in tree ({0}) does not match number of nodes given ({1})".format(
@@ -415,7 +484,7 @@ class Skeleton(object):
             and the flood filled mask.
             """
 
-            def __init__(self, id):
+            def __init__(self, nid, pid=None):
                 """
                 initialize a node with either a region or a node
                 """
@@ -427,7 +496,8 @@ class Skeleton(object):
                     "is_filled": False,
                     "has_volume": False,
                 }
-                self.key = id
+                self.pid = pid
+                self.key = nid
 
             def set_bounds(self, bounds):
                 self.value["start"] = bounds.start
@@ -485,6 +555,32 @@ class Skeleton(object):
 
             def has_key(self, key):
                 return self.key == key
+
+            def intersects(self, other):
+                """
+                Check if the overlapping sections of two nodes share any points.
+                They cannot overlap if either one failed to generate a mask.
+                """
+                if not self.is_filled() or not other.is_filled():
+                    return False
+                mask_A = self.get_mask()
+                bound_A = self.get_bounds()
+                mask_B = other.get_mask()
+                bound_B = other.get_bounds()
+                new_start = np.array(
+                    [max(bound_A[0][i], bound_B[0][i]) for i in range(3)]
+                )
+                new_stop = np.array(
+                    [min(bound_A[1][i], bound_B[1][i]) for i in range(3)]
+                )
+                small_mask_a = mask_A[
+                    list(map(slice, new_start - bound_A[0], new_stop - bound_A[0]))
+                ]
+                small_mask_b = mask_B[
+                    list(map(slice, new_start - bound_B[0], new_stop - bound_B[0]))
+                ]
+                combined = (small_mask_a + small_mask_b) // 2
+                return np.sum(combined) > 0
 
             def __str__(self):
                 if len(self.children) > 0:
