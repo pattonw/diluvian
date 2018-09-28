@@ -478,7 +478,7 @@ def fill_skeleton_with_model_threaded(
             skel.render_large_skeleton()
         elif s == "s":
             s = raw_input("Please enter the desired file name:\n")
-            skel.save_skeleton_mask_mesh(s)
+            skel.save_skeleton_mask_meshes(s)
         else:
             break
 
