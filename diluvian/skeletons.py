@@ -501,6 +501,12 @@ class Skeleton(object):
                 self.pid = pid
                 self.key = nid
 
+            def get_node_data(self):
+                ids = [self.key, self.pid]
+                center = list((self.value["start"] + self.value["stop"]) // 2)
+                data = ids + center
+                return data
+
             def set_bounds(self, bounds):
                 self.value["start"] = bounds.start
                 self.value["stop"] = bounds.stop
