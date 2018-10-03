@@ -165,7 +165,7 @@ def seeds_from_skeleton(filename):
         skeleton = skeleton[[valid(x[4], x[3], x[2]) for x in skeleton]]
 
         return skeleton[:, 2:], skeleton[:, :2]
-    elif filename[-3:] == "csv":
+    elif filename.name[-3:] == "csv":
         import csv
 
         coords = []
