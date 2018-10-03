@@ -150,13 +150,13 @@ def seeds_from_skeleton(filename):
 
     def valid(x, y, z):
         return (
-            BOUNDS[0][2] + IFOV[2] <= x // RES[2] - TRANS[2] <= BOUNDS[1][2] + IFOV[2]
+            BOUNDS[0][2] + IFOV[2] <= x // RES[2] - TRANS[2] < BOUNDS[1][2] + IFOV[2]
             and BOUNDS[0][1] + IFOV[1]
             <= y // RES[1] - TRANS[1]
-            <= BOUNDS[1][1] + IFOV[1]
+            < BOUNDS[1][1] + IFOV[1]
             and BOUNDS[0][0] + IFOV[0]
             <= z // RES[0] - TRANS[0]
-            <= BOUNDS[1][0] + IFOV[0]
+            < BOUNDS[1][0] + IFOV[0]
         )
 
     skeleton = skeleton[[valid(x[4], x[3], x[2]) for x in skeleton]]

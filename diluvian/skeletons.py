@@ -432,7 +432,7 @@ class Skeleton(object):
                 # raise Exception("Root node was not in the list")
 
             if len([x for x in self.traverse()]) != len(pairs):
-                raise Exception(
+                logging.warn(
                     "number of nodes in tree ({0}) does not match number of nodes given ({1})".format(
                         len([x for x in self.traverse()]), len(pairs)
                     )
