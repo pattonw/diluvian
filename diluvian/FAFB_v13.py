@@ -335,10 +335,7 @@ def fill_skeleton_with_model_threaded(
     ]
     nodes = [np.array(list(ids[i]) + seeds[i]) for i in range(len(seeds))]
     skel = Skeleton(ids)
-    region_shape = (
-        CONFIG.model.input_fov_shape
-        + 4 * CONFIG.model.output_fov_shape // CONFIG.model.output_fov_move_fraction
-    )
+    region_shape = CONFIG.model.input_fov_shape
 
     pbar = tqdm(desc="Node queue", total=len(nodes), miniters=1, smoothing=0.0)
     num_nodes = len(nodes)
