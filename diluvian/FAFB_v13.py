@@ -331,7 +331,7 @@ def fill_skeleton_with_model_threaded(
 
     for skeleton_file in skeleton_file_path.iterdir():
         if skeleton_file.name[:18] == "27884_downsampled_":
-            seeds, ids = seeds_from_skeleton(skeleton_file)
+            seeds, ids = seeds_from_skeleton(skeleton_file.name)
             seeds = [
                 list(volume.world_coord_to_local(volume_a.real_coord_to_pixel(seed)))
                 for seed in seeds
@@ -487,7 +487,7 @@ def fill_skeleton_with_model_threaded(
             manager.shutdown()
 
             pbar.close()
-            skel.save_skeleton_mask_meshes(skeleton_file.name.split('.')[0])
+            skel.save_skeleton_mask_meshes(skeleton_file.name.split(".")[0])
 
 
 def run():
