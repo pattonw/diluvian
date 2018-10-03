@@ -134,7 +134,7 @@ class FAFBStackVolume(ImageStackVolume):
 
 
 def seeds_from_skeleton(filename):
-    if filename[-4:] == "json":
+    if filename.name[-4:] == "json":
         import json
 
         json_file = Path(filename)
@@ -331,7 +331,7 @@ def fill_skeleton_with_model_threaded(
 
     for skeleton_file in skeleton_file_path.iterdir():
         if skeleton_file.name[:18] == "27884_downsampled_":
-            seeds, ids = seeds_from_skeleton(skeleton_file.name)
+            seeds, ids = seeds_from_skeleton(skeleton_file)
             seeds = [
                 list(volume.world_coord_to_local(volume_a.real_coord_to_pixel(seed)))
                 for seed in seeds
