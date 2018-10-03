@@ -170,7 +170,7 @@ def seeds_from_skeleton(filename):
 
         coords = []
         ids = []
-        with open(filename, newline="") as csvfile:
+        with open(str(filename), newline="") as csvfile:
             reader = csv.reader(csvfile, delimiter=",", quotechar="|")
             for row in reader:
                 coords.append([int(float(x)) for x in row[2:]])
