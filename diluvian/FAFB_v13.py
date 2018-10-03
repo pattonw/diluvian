@@ -460,30 +460,7 @@ def fill_skeleton_with_model_threaded(
     manager.shutdown()
 
     pbar.close()
-
-    if save_output_file:
-        skel.save_skeleton_mask_mesh(save_output_file)
-        skel.save_stats(save_output_file)
-
-    while save_output_file is None:
-        s = raw_input(
-            "Press Enter to continue, "
-            "r to 3D render body, "
-            "rs to 3D render body with seeds, "
-            "s to save masks for visualization elsewhere, "
-            "q to quit..."
-        )
-        if s == "q":
-            return
-        elif s == "rs":
-            skel.render_skeleton()
-        elif s == "r":
-            skel.render_large_skeleton()
-        elif s == "s":
-            s = raw_input("Please enter the desired file name:\n")
-            skel.save_skeleton_mask_meshes(s)
-        else:
-            break
+    skel.save_skeleton_mask_meshes("27884_meshes")
 
 
 def run():
