@@ -183,7 +183,7 @@ def seeds_from_skeleton(filename):
 
 def fill_skeleton_with_model_threaded(
     model_file,
-    skeleton_file_path,
+    skeleton_file,
     volumes=None,
     partition=False,
     augment=False,
@@ -337,9 +337,7 @@ def fill_skeleton_with_model_threaded(
     skel = Skeleton(ids)
     region_shape = (
         CONFIG.model.input_fov_shape
-        + 4
-        * CONFIG.model.output_fov_shape
-        // CONFIG.model.output_fov_move_fraction
+        + 4 * CONFIG.model.output_fov_shape // CONFIG.model.output_fov_move_fraction
     )
 
     pbar = tqdm(desc="Node queue", total=len(nodes), miniters=1, smoothing=0.0)
@@ -418,8 +416,7 @@ def fill_skeleton_with_model_threaded(
 
         if tuple(expected_node) in unordered_results:
             logging.debug(
-                "Expected node %s is in old results",
-                np.array_str(expected_node),
+                "Expected node %s is in old results", np.array_str(expected_node)
             )
             node = expected_node
             body = unordered_results[tuple(node)]
@@ -454,13 +451,9 @@ def fill_skeleton_with_model_threaded(
             raise Exception("Body is None.")
 
         if not body.is_seed_in_mask():
-            logging.debug(
-                "Seed (%s) is not in its body.", np.array_str(node[2:])
-            )
+            logging.debug("Seed (%s) is not in its body.", np.array_str(node[2:]))
 
-        mask, bounds = body._get_bounded_mask(
-            CONFIG.postprocessing.closing_shape
-        )
+        mask, bounds = body._get_bounded_mask(CONFIG.postprocessing.closing_shape)
 
         body_size = np.count_nonzero(mask)
 
