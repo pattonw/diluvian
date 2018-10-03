@@ -134,34 +134,51 @@ class FAFBStackVolume(ImageStackVolume):
 
 
 def seeds_from_skeleton(filename):
-    import json
+    if filename[-4:] == "json":
+        import json
 
-    json_file = Path(filename)
-    with json_file.open("r") as f:
-        skeleton = json.load(f)
+        json_file = Path(filename)
+        with json_file.open("r") as f:
+            skeleton = json.load(f)
 
-    nodes = skeleton[0]
-    ids, pids, _, xs, ys, zs, _, _ = zip(*nodes)
-    pids = list(pids)
-    for i in range(len(ids)):
-        if pids[i] is None:
-            pids[i] = ids[i]
-    skeleton = np.array([ids, pids, zs, ys, xs], dtype="int").T
+        nodes = skeleton[0]
+        ids, pids, _, xs, ys, zs, _, _ = zip(*nodes)
+        pids = list(pids)
+        for i in range(len(ids)):
+            if pids[i] is None:
+                pids[i] = ids[i]
+        skeleton = np.array([ids, pids, zs, ys, xs], dtype="int").T
 
-    def valid(x, y, z):
-        return (
-            BOUNDS[0][2] + IFOV[2] <= x // RES[2] - TRANS[2] < BOUNDS[1][2] + IFOV[2]
-            and BOUNDS[0][1] + IFOV[1]
-            <= y // RES[1] - TRANS[1]
-            < BOUNDS[1][1] + IFOV[1]
-            and BOUNDS[0][0] + IFOV[0]
-            <= z // RES[0] - TRANS[0]
-            < BOUNDS[1][0] + IFOV[0]
-        )
+        def valid(x, y, z):
+            return (
+                BOUNDS[0][2] + IFOV[2]
+                <= x // RES[2] - TRANS[2]
+                < BOUNDS[1][2] - IFOV[2]
+                and BOUNDS[0][1] + IFOV[1]
+                <= y // RES[1] - TRANS[1]
+                < BOUNDS[1][1] - IFOV[1]
+                and BOUNDS[0][0] + IFOV[0]
+                <= z // RES[0] - TRANS[0]
+                < BOUNDS[1][0] - IFOV[0]
+            )
 
-    skeleton = skeleton[[valid(x[4], x[3], x[2]) for x in skeleton]]
+        skeleton = skeleton[[valid(x[4], x[3], x[2]) for x in skeleton]]
 
-    return skeleton[:, 2:], skeleton[:, :2]
+        return skeleton[:, 2:], skeleton[:, :2]
+    elif filename[-3:] == "csv":
+        import csv
+
+        coords = []
+        ids = []
+        with open(filename, newline="") as csvfile:
+            reader = csv.reader(csvfile, delimiter=",", quotechar="|")
+            for row in reader:
+                coords.append([int(float(x)) for x in row[2:]])
+                if row[1].strip() == "null" or row[1].strip() == "none":
+                    ids.append([int(float(row[0])), None])
+                else:
+                    ids.append([int(float(x)) for x in row[:2]])
+        return coords, ids
 
 
 def fill_skeleton_with_model_threaded(
@@ -471,7 +488,7 @@ def run():
     tf.set_random_seed(CONFIG.random_seed)
 
     model_file = "trained_models/pattonw-v0/pattonw-v0.hdf5"
-    skeleton_file = "../tests/27884.json"
+    skeleton_file = "../tests/27884_downsampled.csv"
     fill_skeleton_with_model_threaded(
         model_file,
         skeleton_file,
