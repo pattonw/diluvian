@@ -497,7 +497,7 @@ def run():
                 bounds_input_file=None,
                 bias=True,
                 move_batch_size=1,
-                max_moves=None,
+                max_moves=3,
                 remask_interval=None,
                 sparse=False,
                 moves=None,
