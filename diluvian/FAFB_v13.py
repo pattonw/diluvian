@@ -318,7 +318,10 @@ def fill_skeleton_with_model_threaded(
     ]
     nodes = [np.array(list(ids[i]) + seeds[i]) for i in range(len(seeds))]
     skel = Skeleton(ids)
-    region_shape = CONFIG.model.input_fov_shape
+    region_shape = (
+        CONFIG.model.input_fov_shape
+        + 4 * CONFIG.model.output_fov_shape // CONFIG.model.output_fov_move_fraction
+    )
 
     pbar = tqdm(desc="Node queue", total=len(nodes), miniters=1, smoothing=0.0)
     num_nodes = len(nodes)
@@ -491,9 +494,7 @@ def run():
     tf.set_random_seed(CONFIG.random_seed)
 
     model_file = "trained_models/pattonw-v0/pattonw-v0.hdf5"
-    skeleton_file = (
-        "../tests/77661.json"
-    )
+    skeleton_file = "../tests/27884.json"
     fill_skeleton_with_model_threaded(
         model_file,
         skeleton_file,
@@ -503,7 +504,7 @@ def run():
         bounds_input_file=None,
         bias=True,
         move_batch_size=1,
-        max_moves=3,
+        max_moves=None,
         remask_interval=None,
         sparse=False,
         moves=None,
