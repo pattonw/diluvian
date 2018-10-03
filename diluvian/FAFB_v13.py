@@ -183,7 +183,7 @@ def seeds_from_skeleton(filename):
 
 def fill_skeleton_with_model_threaded(
     model_file,
-    skeleton_file,
+    skeleton_file_path,
     volumes=None,
     partition=False,
     augment=False,
@@ -328,156 +328,166 @@ def fill_skeleton_with_model_threaded(
         image_leaf_shape=None,
     )
     volume = volume_a.downsample([35, 16, 16])
-    seeds, ids = seeds_from_skeleton(skeleton_file)
-    seeds = [
-        list(volume.world_coord_to_local(volume_a.real_coord_to_pixel(seed)))
-        for seed in seeds
-    ]
-    nodes = [np.array(list(ids[i]) + seeds[i]) for i in range(len(seeds))]
-    skel = Skeleton(ids)
-    region_shape = (
-        CONFIG.model.input_fov_shape
-        + 4 * CONFIG.model.output_fov_shape // CONFIG.model.output_fov_move_fraction
-    )
 
-    pbar = tqdm(desc="Node queue", total=len(nodes), miniters=1, smoothing=0.0)
-    num_nodes = len(nodes)
-    nodes = iter(nodes)
-
-    manager = Manager()
-    # Queue of seeds to be picked up by workers.
-    node_queue = manager.Queue()
-    # Queue of results from workers.
-    results_queue = manager.Queue()
-    # Dequeue of seeds that were put in seed_queue but have not yet been
-    # combined by the main process.
-    dispatched_nodes = deque()
-    # Seeds that were placed in seed_queue but subsequently covered by other
-    # results before their results have been processed. This allows workers to
-    # abort working on these seeds by checking this list.
-    revoked_nodes = manager.list()
-    # Results that have been received by the main process but have not yet
-    # been combined because they were not received in the dispatch order.
-    unordered_results = {}
-
-    def queue_next_node():
-        total = 0
-        for node in nodes:
-            if skel.is_filled(node[0]):
-                # This seed has already been filled.
-                total += 1
-                continue
-            dispatched_nodes.append(node)
-            node_queue.put(node)
-
-            break
-
-        return total
-
-    for _ in range(min(num_nodes, num_workers * worker_prequeue)):
-        processed_nodes = queue_next_node()
-        pbar.update(processed_nodes)
-
-    if "CUDA_VISIBLE_DEVICES" in os.environ:
-        set_devices = False
-        num_workers = 1
-        logging.warn(
-            "Environment variable CUDA_VISIBLE_DEVICES is set, so only one worker can be used.\n"
-            "See https://github.com/aschampion/diluvian/issues/11"
-        )
-    else:
-        set_devices = True
-
-    workers = []
-    loading_lock = manager.Lock()
-    for worker_id in range(num_workers):
-        w = Process(
-            target=worker,
-            args=(
-                worker_id,
-                set_devices,
-                model_file,
-                volume,
-                region_shape,
-                node_queue,
-                results_queue,
-                loading_lock,
-                revoked_nodes,
-            ),
-        )
-        w.start()
-        workers.append(w)
-
-    # For each seed, create region, fill, threshold, and merge to output volume.
-    while dispatched_nodes:
-        processed_nodes = 1
-        expected_node = dispatched_nodes.popleft()
-        logging.debug("Expecting node %s", np.array_str(expected_node))
-
-        if tuple(expected_node) in unordered_results:
-            logging.debug(
-                "Expected node %s is in old results", np.array_str(expected_node)
+    for skeleton_file in skeleton_file_path.iterdir():
+        if skeleton_file.name[:18] == "27884_downsampled_":
+            seeds, ids = seeds_from_skeleton(skeleton_file)
+            seeds = [
+                list(volume.world_coord_to_local(volume_a.real_coord_to_pixel(seed)))
+                for seed in seeds
+            ]
+            nodes = [np.array(list(ids[i]) + seeds[i]) for i in range(len(seeds))]
+            skel = Skeleton(ids)
+            region_shape = (
+                CONFIG.model.input_fov_shape
+                + 4
+                * CONFIG.model.output_fov_shape
+                // CONFIG.model.output_fov_move_fraction
             )
-            node = expected_node
-            body = unordered_results[tuple(node)]
-            del unordered_results[tuple(node)]
 
-        else:
-            node, body = results_queue.get(True)
-            processed_nodes += queue_next_node()
+            pbar = tqdm(desc="Node queue", total=len(nodes), miniters=1, smoothing=0.0)
+            num_nodes = len(nodes)
+            nodes = iter(nodes)
 
-            while not np.array_equal(node, expected_node):
-                logging.debug("Node %s is early, stashing", np.array_str(node))
-                unordered_results[tuple(node)] = body
-                node, body = results_queue.get(True)
-                processed_nodes += queue_next_node()
+            manager = Manager()
+            # Queue of seeds to be picked up by workers.
+            node_queue = manager.Queue()
+            # Queue of results from workers.
+            results_queue = manager.Queue()
+            # Dequeue of seeds that were put in seed_queue but have not yet been
+            # combined by the main process.
+            dispatched_nodes = deque()
+            # Seeds that were placed in seed_queue but subsequently covered by other
+            # results before their results have been processed. This allows workers to
+            # abort working on these seeds by checking this list.
+            revoked_nodes = manager.list()
+            # Results that have been received by the main process but have not yet
+            # been combined because they were not received in the dispatch order.
+            unordered_results = {}
 
-        logging.debug("Processing node at %s", np.array_str(node))
-        pbar.update(processed_nodes)
+            def queue_next_node():
+                total = 0
+                for node in nodes:
+                    if skel.is_filled(node[0]):
+                        # This seed has already been filled.
+                        total += 1
+                        continue
+                    dispatched_nodes.append(node)
+                    node_queue.put(node)
 
-        if skel.is_filled(node[0]):
-            # This seed has already been filled.
-            logging.debug(
-                "Node (%s) was filled but has been covered in the meantime.",
-                np.array_str(node),
-            )
-            loading_lock.acquire()
-            if tuple(node) in revoked_nodes:
-                revoked_nodes.remove(tuple(node))
-            loading_lock.release()
-            continue
+                    break
 
-        if body is None:
-            raise Exception("Body is None.")
+                return total
 
-        if not body.is_seed_in_mask():
-            logging.debug("Seed (%s) is not in its body.", np.array_str(node[2:]))
+            for _ in range(min(num_nodes, num_workers * worker_prequeue)):
+                processed_nodes = queue_next_node()
+                pbar.update(processed_nodes)
 
-        mask, bounds = body._get_bounded_mask(CONFIG.postprocessing.closing_shape)
+            if "CUDA_VISIBLE_DEVICES" in os.environ:
+                set_devices = False
+                num_workers = 1
+                logging.warn(
+                    "Environment variable CUDA_VISIBLE_DEVICES is set, so only one worker can be used.\n"
+                    "See https://github.com/aschampion/diluvian/issues/11"
+                )
+            else:
+                set_devices = True
 
-        body_size = np.count_nonzero(mask)
+            workers = []
+            loading_lock = manager.Lock()
+            for worker_id in range(num_workers):
+                w = Process(
+                    target=worker,
+                    args=(
+                        worker_id,
+                        set_devices,
+                        model_file,
+                        volume,
+                        region_shape,
+                        node_queue,
+                        results_queue,
+                        loading_lock,
+                        revoked_nodes,
+                    ),
+                )
+                w.start()
+                workers.append(w)
 
-        if body_size == 0:
-            logging.debug("Body is empty.")
+            # For each seed, create region, fill, threshold, and merge to output volume.
+            while dispatched_nodes:
+                processed_nodes = 1
+                expected_node = dispatched_nodes.popleft()
+                logging.debug("Expecting node %s", np.array_str(expected_node))
 
-        logging.debug("Adding body to prediction label volume.")
+                if tuple(expected_node) in unordered_results:
+                    logging.debug(
+                        "Expected node %s is in old results",
+                        np.array_str(expected_node),
+                    )
+                    node = expected_node
+                    body = unordered_results[tuple(node)]
+                    del unordered_results[tuple(node)]
 
-        orig_bounds = SubvolumeBounds(
-            start=node[2:] - np.floor_divide(region_shape, 2),
-            stop=node[2:] + np.floor_divide(region_shape, 2) + 1,
-        )
-        skel.fill(node[0], orig_bounds, body)
+                else:
+                    node, body = results_queue.get(True)
+                    processed_nodes += queue_next_node()
 
-        logging.debug("Filled node (%s)", np.array_str(node))
+                    while not np.array_equal(node, expected_node):
+                        logging.debug("Node %s is early, stashing", np.array_str(node))
+                        unordered_results[tuple(node)] = body
+                        node, body = results_queue.get(True)
+                        processed_nodes += queue_next_node()
 
-    for _ in range(num_workers):
-        node_queue.put("DONE")
-    for wid, worker in enumerate(workers):
-        worker.join()
-    manager.shutdown()
+                logging.debug("Processing node at %s", np.array_str(node))
+                pbar.update(processed_nodes)
 
-    pbar.close()
-    skel.save_skeleton_mask_meshes("27884_meshes")
+                if skel.is_filled(node[0]):
+                    # This seed has already been filled.
+                    logging.debug(
+                        "Node (%s) was filled but has been covered in the meantime.",
+                        np.array_str(node),
+                    )
+                    loading_lock.acquire()
+                    if tuple(node) in revoked_nodes:
+                        revoked_nodes.remove(tuple(node))
+                    loading_lock.release()
+                    continue
+
+                if body is None:
+                    raise Exception("Body is None.")
+
+                if not body.is_seed_in_mask():
+                    logging.debug(
+                        "Seed (%s) is not in its body.", np.array_str(node[2:])
+                    )
+
+                mask, bounds = body._get_bounded_mask(
+                    CONFIG.postprocessing.closing_shape
+                )
+
+                body_size = np.count_nonzero(mask)
+
+                if body_size == 0:
+                    logging.debug("Body is empty.")
+
+                logging.debug("Adding body to prediction label volume.")
+
+                orig_bounds = SubvolumeBounds(
+                    start=node[2:] - np.floor_divide(region_shape, 2),
+                    stop=node[2:] + np.floor_divide(region_shape, 2) + 1,
+                )
+                skel.fill(node[0], orig_bounds, body)
+
+                logging.debug("Filled node (%s)", np.array_str(node))
+
+            for _ in range(num_workers):
+                node_queue.put("DONE")
+            for wid, worker in enumerate(workers):
+                worker.join()
+            manager.shutdown()
+
+            pbar.close()
+            skel.save_skeleton_mask_meshes(skeleton_file.name.split('.')[0])
 
 
 def run():
@@ -488,10 +498,10 @@ def run():
     tf.set_random_seed(CONFIG.random_seed)
 
     model_file = "trained_models/pattonw-v0/pattonw-v0.hdf5"
-    skeleton_file = "../tests/27884_downsampled.csv"
+    skeleton_file_path = Path("../tests/")
     fill_skeleton_with_model_threaded(
         model_file,
-        skeleton_file,
+        skeleton_file_path,
         volumes=None,
         partition=False,
         augment=False,
