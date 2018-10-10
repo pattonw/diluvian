@@ -40,7 +40,7 @@ class FAFBStackVolume(ImageStackVolume):
             "/groups"
             + "/flyTEM"
             + "/flyTEM"
-            + "/from_tier2"
+            + "/from_tier2_nearline"
             + "/eric"
             + "/working_sets"
             + "/150625_segmentation_samples"
@@ -335,9 +335,9 @@ def fill_skeleton_with_model_threaded(
     ]
     nodes = [np.array(list(ids[i]) + seeds[i]) for i in range(len(seeds))]
     skel = Skeleton(ids)
-    tree_nids = [node.get_node_data() for node in skel.tree.traverse()]
-    nodes = filter(lambda x: x[0] in tree_nids, nodes)
-    region_shape = CONFIG.model.input_fov_shape
+    tree_nids = [node.key for node in skel.tree.traverse()]
+    nodes = list(filter(lambda x: x[0] in tree_nids, nodes))
+    region_shape = CONFIG.model.input_fov_shape + 2 * CONFIG.model.output_fov_shape // 4
 
     pbar = tqdm(desc="Node queue", total=len(nodes), miniters=1, smoothing=0.0)
     num_nodes = len(nodes)
@@ -476,7 +476,7 @@ def fill_skeleton_with_model_threaded(
     manager.shutdown()
 
     pbar.close()
-    skel.save_skeleton_mask_meshes(skeleton_file.name.split(".")[0])
+    skel.save_skeleton_masks(skeleton_file.name.split(".")[0])
 
 
 def run():
@@ -499,7 +499,7 @@ def run():
                 bounds_input_file=None,
                 bias=True,
                 move_batch_size=1,
-                max_moves=3,
+                max_moves=None,
                 remask_interval=None,
                 sparse=False,
                 moves=None,
