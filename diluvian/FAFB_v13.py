@@ -335,7 +335,8 @@ def fill_skeleton_with_model_threaded(
     ]
     nodes = [np.array(list(ids[i]) + seeds[i]) for i in range(len(seeds))]
     skel = Skeleton(ids)
-    nodes = [node.get_node_data() for node in skel.traverse()]
+    tree_nids = [node.get_node_data() for node in skel.tree.traverse()]
+    nodes = filter(lambda x: x[0] in tree_nids, nodes)
     region_shape = CONFIG.model.input_fov_shape
 
     pbar = tqdm(desc="Node queue", total=len(nodes), miniters=1, smoothing=0.0)
