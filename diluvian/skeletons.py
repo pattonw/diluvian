@@ -548,6 +548,9 @@ class Skeleton(object):
                 self.pid = pid
                 self.parent = None
                 self.key = nid
+                self.x = 0
+                self.y = 0
+                self.z = 0
 
             def set_bounds(self, bounds):
                 self.value["start"] = bounds.start
@@ -641,6 +644,9 @@ class Skeleton(object):
                 ]
                 combined = (small_mask_a + small_mask_b) // 2
                 return np.sum(combined)
+
+            def potential_missing_branch(self):
+                return 0
 
             def __str__(self):
                 if len(self.children) > 0:
