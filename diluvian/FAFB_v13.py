@@ -16,7 +16,6 @@ import math
 
 import numpy as np
 import six
-from six.moves import input as raw_input
 from tqdm import tqdm
 
 from .config import CONFIG
@@ -173,7 +172,7 @@ def seeds_from_skeleton(filename):
         with open(str(filename), newline="") as csvfile:
             reader = csv.reader(csvfile, delimiter=",", quotechar="|")
             for row in reader:
-                coords.append([int(float(x)) for x in row[2:]])
+                coords.append([int(float(x)) for x in row[2::-1]])
                 if row[1].strip() == "null" or row[1].strip() == "none":
                     ids.append([int(float(row[0])), None])
                 else:

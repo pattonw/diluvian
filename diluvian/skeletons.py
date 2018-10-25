@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 
 
-from __future__ import division
-
 import logging
 from collections import deque
 from skimage import measure
@@ -34,7 +32,6 @@ class Skeleton(object):
         self.tree = self.SkeletonTree()
         self.start = [float("inf"), float("inf"), float("inf")]
         self.stop = [0, 0, 0]
-        self.scale = {"shift": np.array([0, 0, 6050]), "scale": np.array([1, 4, 4])}
         if id_pairs is not None:
             self.outline_from_pairs(id_pairs)
 
@@ -290,29 +287,31 @@ class Skeleton(object):
 
     def save_stats(self, output_file):
         """
-        Creates a csv of the form (id, pid, x, y, z, intersect) where:
-        -id is the nodes id,
-        -pid is the id of the nodes parent (own id if root),
-        -x is the x coordinate of a node
-        -y is the y coordinate of a node
-        -z is the z coordinate of a node
-        -intersect is whether a node's mask intersects with the mask of its parent.
+        Creates a csv of the form (id, pid, x, y, z, intersect, missing) where:
+        -id: int: the nodes id,
+        -pid: int: the id of the nodes parent (own id if root),
+        -x: int: the x coordinate of a node
+        -y: int: the y coordinate of a node
+        -z: int: the z coordinate of a node
+        -intersect: int: the number of voxels selected by both this node and its parent during segmentation.
+        -missing: float: the confidence that this node is near a missing branch
         """
         with open(output_file + ".csv", "w") as f:
-            parent = self.root
-            node_queue = [self.root]
+            parent = self.tree.root
+            node_queue = [self.tree.root]
             while len(node_queue) > 0:
                 current = node_queue.pop(0)
                 if parent is None:
                     parent = current
                 f.write(
-                    "{},{},{},{},{},{}".format(
+                    "{},{},{},{},{},{},{}".format(
                         current,
                         parent,
                         current.x,
                         current.y,
                         current.z,
-                        int(current.intersects(parent)),
+                        current.intersects(parent),
+                        current.potential_missing_branch(),
                     )
                 )
                 for child in current.get_children():
@@ -328,20 +327,12 @@ class Skeleton(object):
 
         fig = mlab.figure(size=(1280, 720))
 
-        for mask, seed_mask in self.get_masks(show_seeds):
+        for mask, bounds, nid, pid in self.get_masks():
             grid = mlab.pipeline.scalar_field(mask)
             grid.spacing = CONFIG.volume.resolution
 
             colors = (random.random(), random.random(), random.random())
             mlab.pipeline.iso_surface(grid, color=colors, contours=[0.5], opacity=0.1)
-
-            if show_seeds:
-                seed_grid = mlab.pipeline.scalar_field(seed_mask)
-                seed_grid.spacing = CONFIG.volume.resolution
-
-                mlab.pipeline.iso_surface(
-                    seed_grid, color=colors, contours=[0.5], opacity=1
-                )
 
         mlab.orientation_axes(figure=fig, xlabel="Z", zlabel="X")
         mlab.view(azimuth=45, elevation=30, focalpoint="auto", roll=90, figure=fig)
@@ -383,6 +374,62 @@ class Skeleton(object):
         mlab.view(azimuth=45, elevation=30, focalpoint="auto", roll=90, figure=fig)
 
         mlab.show()
+
+    def potential_missing_branch(
+        self, chain_radius=10, ignore_branch_radius=5, validate=False
+    ):
+        """
+        Idea: Get the skeletal volume intersecting a sphere around each
+        floodfilling sample point and calculate the offset between its
+        sample point and its center of mass. Assuming a branch was missed
+        in skeletonization but not by floodfilling, we should see a
+        anomalous movement of the center of mass as voxels in the missing
+        branch are added in a direction inconsistent with the expected
+        selection if there was no branch there. Thus we could turn the
+        center of mass data into a time series and use anomaly detection
+        to find areas likely to contain missing branches
+        """
+        self.center_of_mass_vec = self.get_center_of_mass()
+        if self.is_near_branch(ignore_branch_radius):
+            if validate:
+                self.validate_branch()
+            return 0
+        else:
+            confidence = []
+            for chain in self.get_possible_chains(chain_radius):
+                confidence.append(self.check_for_branch(chain))
+            return np.mean(confidence)
+
+    def get_possible_chains(self, node, chain_radius=10):
+        nodes_in_range, outer_edge = self.get_radius(node, chain_radius)
+        raise Exception("not yet implemented")
+
+    def get_radius(self, node, radius=3):
+        outers = [node]
+        inners = []
+        nodes_in_radius = [node]
+        outer_edge = []
+
+        for _ in range(radius):
+            new_outer = []
+            for outer in outers:
+                num_neighbors = []
+                for neighbor in outer.traverse_neighbors():
+                    if neighbor not in inners:
+                        num_neighbors += 1
+                        nodes_in_radius.append(neighbor)
+                        new_outer.append(neighbor)
+                if num_neighbors == 0:
+                    outer_edge.append(outer)
+            inners = outers[:]
+            outers = new_outer[:]
+        for n in inners:
+            if n not in outer_edge:
+                outer_edge.append(n)
+        return nodes_in_radius, outer_edge
+
+    def check_for_branch(self, chain):
+        raise Exception("not yet implemented")
 
     class SkeletonTree:
         """
@@ -499,13 +546,8 @@ class Skeleton(object):
                     "has_volume": False,
                 }
                 self.pid = pid
+                self.parent = None
                 self.key = nid
-
-            def get_node_data(self):
-                ids = [self.key, self.pid]
-                center = list((self.value["start"] + self.value["stop"]) // 2)
-                data = ids + center
-                return data
 
             def set_bounds(self, bounds):
                 self.value["start"] = bounds.start
@@ -541,7 +583,11 @@ class Skeleton(object):
                     return False
 
             def append_child(self, child):
+                child.set_parent(self)
                 self.value["children"].append(child)
+
+            def set_parent(self, parent):
+                self.parent = parent
 
             def get_children(self):
                 return self.value["children"]
@@ -563,6 +609,12 @@ class Skeleton(object):
 
             def has_key(self, key):
                 return self.key == key
+
+            def traverse_neighbors(self):
+                if self.parent is not None:
+                    yield self.parent
+                for child in self.value["children"]:
+                    yield child
 
             def intersects(self, other):
                 """
@@ -588,7 +640,7 @@ class Skeleton(object):
                     list(map(slice, new_start - bound_B[0], new_stop - bound_B[0]))
                 ]
                 combined = (small_mask_a + small_mask_b) // 2
-                return np.sum(combined) > 0
+                return np.sum(combined)
 
             def __str__(self):
                 if len(self.children) > 0:
