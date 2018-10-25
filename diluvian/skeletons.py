@@ -566,7 +566,7 @@ class Skeleton(object):
                 return self.value["body"]
 
             def get_mask(self):
-                return self.value["body"].body.get_seeded_component(
+                return self.value["body"].get_seeded_component(
                     CONFIG.postprocessing.closing_shape
                 )
 
