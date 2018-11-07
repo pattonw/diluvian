@@ -1,10 +1,7 @@
 # -*- coding: utf-8 -*-
 """Simple octree data structures for block sparse 3D arrays."""
-
-
-from __future__ import division
-
 import numpy as np
+from .libpyn5 import read_n5, write_n5
 
 
 class OctreeVolume(object):
@@ -31,14 +28,70 @@ class OctreeVolume(object):
 
     def __init__(self, leaf_shape, bounds, dtype, populator=None):
         self.leaf_shape = np.asarray(leaf_shape).astype(np.int64)
-        self.bounds = (np.asarray(bounds[0], dtype=np.int64),
-                       np.asarray(bounds[1], dtype=np.int64))
+        self.bounds = (
+            np.asarray(bounds[0], dtype=np.int64),
+            np.asarray(bounds[1], dtype=np.int64),
+        )
         self.dtype = np.dtype(dtype)
         self.populator = populator
-        ceil_bounds = self.leaf_shape * \
-            np.exp2(np.ceil(np.log2((self.bounds[1] - self.bounds[0]) /
-                                    self.leaf_shape.astype(np.float64)))).astype(np.int64).max()
-        self.root_node = BranchNode(self, (self.bounds[0], self.bounds[0] + ceil_bounds), clip_bound=self.bounds[1])
+        ceil_bounds = (
+            self.leaf_shape
+            * np.exp2(
+                np.ceil(
+                    np.log2(
+                        (self.bounds[1] - self.bounds[0])
+                        / self.leaf_shape.astype(np.float64)
+                    )
+                )
+            )
+            .astype(np.int64)
+            .max()
+        )
+        self.root_node = BranchNode(
+            self,
+            (self.bounds[0], self.bounds[0] + ceil_bounds),
+            clip_bound=self.bounds[1],
+        )
+
+    def write_to_n5(self, folder, dataset):
+        """
+        Note: because diluvian works with z,y,x and pyn5 assumes x,y,z: 
+        when writing coordinates must be flipped
+        """
+
+        # z,y,x format
+        dataset_attrs = {
+            "block_shape": np.array([13, 128, 128]),
+            "dimensions": [7062, 15850 + 3 // 4, 10600 // 4],
+        }
+        leaf_count = 0
+        for leaf in self.iter_leaves():
+            start = leaf.bounds[0] - leaf.bounds[0] % dataset_attrs["block_shape"]
+            rounded_up = leaf.bounds[1] + dataset_attrs["block_shape"] - 1
+            end = rounded_up - rounded_up % dataset_attrs["block_shape"]
+            num_blocks = (end - start) // dataset_attrs["block_shape"]
+            for i in range(num_blocks[0]):
+                for j in range(num_blocks[1]):
+                    for k in range(num_blocks[2]):
+                        offset = (
+                            np.array([i, j, k]) * dataset_attrs["block_shape"]
+                        ).astype("int")
+                        block_start = (start + offset).astype("int")
+                        block_end = (
+                            start + offset + dataset_attrs["block_shape"]
+                        ).astype("int")
+                        block_range = list(map(slice, block_start, block_end))
+                        data = self[block_range]
+                        data = data.flatten().astype("int")
+                        write_n5(
+                            folder,
+                            dataset,
+                            ((start + offset) // dataset_attrs["block_shape"])[::-1],
+                            (dataset_attrs["block_shape"])[::-1],
+                            data,
+                        )
+            leaf_count += 1
+            print("leaf {} done".format(leaf_count))
 
     @property
     def shape(self):
@@ -49,26 +102,30 @@ class OctreeVolume(object):
         if isinstance(key, slice) and key.start is None and key.stop is None:
             return self.bounds
 
-        if not hasattr(key, '__len__') or len(key) != 3:
-            raise IndexError('Octrees may only be indexed in 3 dimensions')
+        if not hasattr(key, "__len__") or len(key) != 3:
+            raise IndexError("Octrees may only be indexed in 3 dimensions")
 
         # Convert keys to two numpy arrays for ease.
         npkey = (np.zeros(3, dtype=np.int64), np.zeros(3, dtype=np.int64))
         for i, k in enumerate(key):
             if isinstance(k, slice):
                 if k.step is not None:
-                    raise IndexError('Octrees do not yet support step slicing')
+                    raise IndexError("Octrees do not yet support step slicing")
                 npkey[0][i] = k.start if k.start is not None else self.bounds[0][i]
                 npkey[1][i] = k.stop if k.stop is not None else self.bounds[1][i]
             else:
                 npkey[0][i] = k
                 npkey[1][i] = k + 1
 
-        if np.any(np.less(npkey[0], self.bounds[0])) or \
-           np.any(np.greater(npkey[1], self.bounds[1])) or \
-           np.any(np.greater_equal(npkey[0], npkey[1])):
-            raise IndexError('Invalid indices: outside bounds or empty interval: '
-                             '{} (bounds {})'.format(str(key), str(self.bounds)))
+        if (
+            np.any(np.less(npkey[0], self.bounds[0]))
+            or np.any(np.greater(npkey[1], self.bounds[1]))
+            or np.any(np.greater_equal(npkey[0], npkey[1]))
+        ):
+            raise IndexError(
+                "Invalid indices: outside bounds or empty interval: "
+                "{} (bounds {})".format(str(key), str(self.bounds))
+            )
 
         return npkey
 
@@ -130,7 +187,9 @@ class OctreeVolume(object):
         return copy
 
     def fullness(self):
-        potential_leaves = np.prod(np.ceil(np.true_divide(self.bounds[1] - self.bounds[0], self.leaf_shape)))
+        potential_leaves = np.prod(
+            np.ceil(np.true_divide(self.bounds[1] - self.bounds[0], self.leaf_shape))
+        )
         return self.root_node.count_leaves() / float(potential_leaves)
 
     def get_volume(self):
@@ -138,7 +197,7 @@ class OctreeVolume(object):
 
     def replace_child(self, child, replacement):
         if child != self.root_node:
-            raise ValueError('Attempt to replace unknown child')
+            raise ValueError("Attempt to replace unknown child")
 
         self.root_node = replacement
 
@@ -153,8 +212,7 @@ class Node(object):
         return 0
 
     def get_intersection(self, key):
-        return (np.maximum(self.bounds[0], key[0]),
-                np.minimum(self.bounds[1], key[1]))
+        return (np.maximum(self.bounds[0], key[0]), np.minimum(self.bounds[1], key[1]))
 
     def get_size(self):
         if self.clip_bound is not None:
@@ -176,7 +234,13 @@ class BranchNode(Node):
         self.children = [[[None for _ in range(2)] for _ in range(2)] for _ in range(2)]
 
     def count_leaves(self):
-        return sum(c.count_leaves() for s in self.children for r in s for c in r if c is not None)
+        return sum(
+            c.count_leaves()
+            for s in self.children
+            for r in s
+            for c in r
+            if c is not None
+        )
 
     def iter_leaves(self):
         for i in range(2):
@@ -197,24 +261,36 @@ class BranchNode(Node):
                     if child is None:
                         copy.children[i][j][k] = None
                     else:
-                        copy.children[i][j][k] = child.map_copy(copy, leaf_map, uniform_map)
+                        copy.children[i][j][k] = child.map_copy(
+                            copy, leaf_map, uniform_map
+                        )
         return copy
 
     def get_children_mask(self, key):
-        p = (np.less(key[0], self.midpoint),
-             np.greater(key[1], self.midpoint))
+        p = (np.less(key[0], self.midpoint), np.greater(key[1], self.midpoint))
 
         # TODO must be some way to do combinatorial ops like this with numpy.
-        return list(zip(*np.where([[[p[i][0] and p[j][1] and p[k][2]
-                                     for k in range(2)]
-                                    for j in range(2)]
-                                   for i in range(2)])))
+        return list(
+            zip(
+                *np.where(
+                    [
+                        [
+                            [p[i][0] and p[j][1] and p[k][2] for k in range(2)]
+                            for j in range(2)
+                        ]
+                        for i in range(2)
+                    ]
+                )
+            )
+        )
 
     def get_child_bounds(self, i, j, k):
         mins = (self.bounds[0], self.midpoint)
         maxs = (self.midpoint, self.bounds[1])
-        child_bounds = (np.array((mins[i][0], mins[j][1], mins[k][2])),
-                        np.array((maxs[i][0], maxs[j][1], maxs[k][2])))
+        child_bounds = (
+            np.array((mins[i][0], mins[j][1], mins[k][2])),
+            np.array((maxs[i][0], maxs[j][1], maxs[k][2])),
+        )
         if self.clip_bound is not None:
             clip_bound = np.minimum(child_bounds[1], self.clip_bound)
             if np.array_equal(clip_bound, child_bounds[1]):
@@ -240,18 +316,27 @@ class BranchNode(Node):
             child = self.children[i][j][k]
             subchunk = child.get_intersection(key)
             ind = (subchunk[0] - key[0], subchunk[1] - key[0])
-            chunk[ind[0][0]:ind[1][0],
-                  ind[0][1]:ind[1][1],
-                  ind[0][2]:ind[1][2]] = child[subchunk]
+            chunk[
+                ind[0][0] : ind[1][0], ind[0][1] : ind[1][1], ind[0][2] : ind[1][2]
+            ] = child[subchunk]
 
         return chunk
 
     def __setitem__(self, key, value):
-        if (not hasattr(value, '__len__') or len(value) == 1) and \
-           np.array_equal(key[0], self.bounds[0]) and \
-           np.array_equal(key[1], self.clip_bound):
-            self.replace(UniformBranchNode(self.parent, self.bounds, self.get_volume().dtype, value,
-                                           clip_bound=self.clip_bound))
+        if (
+            (not hasattr(value, "__len__") or len(value) == 1)
+            and np.array_equal(key[0], self.bounds[0])
+            and np.array_equal(key[1], self.clip_bound)
+        ):
+            self.replace(
+                UniformBranchNode(
+                    self.parent,
+                    self.bounds,
+                    self.get_volume().dtype,
+                    value,
+                    clip_bound=self.clip_bound,
+                )
+            )
             return
 
         inds = self.get_children_mask(key)
@@ -265,16 +350,18 @@ class BranchNode(Node):
             subchunk = child.get_intersection(key)
             ind = (subchunk[0] - key[0], subchunk[1] - key[0])
             if isinstance(value, np.ndarray):
-                child[subchunk] = value[ind[0][0]:ind[1][0],
-                                        ind[0][1]:ind[1][1],
-                                        ind[0][2]:ind[1][2]]
+                child[subchunk] = value[
+                    ind[0][0] : ind[1][0], ind[0][1] : ind[1][1], ind[0][2] : ind[1][2]
+                ]
             else:
                 child[subchunk] = value
 
     def populate_child(self, i, j, k):
         volume = self.get_volume()
         if volume.populator is None:
-            raise ValueError('Attempt to retrieve unpopulated region without octree populator')
+            raise ValueError(
+                "Attempt to retrieve unpopulated region without octree populator"
+            )
 
         child_bounds, child_clip_bound = self.get_child_bounds(i, j, k)
         child_shape = child_bounds[1] - child_bounds[0]
@@ -297,7 +384,7 @@ class BranchNode(Node):
                         self.children[i][j][k] = replacement
                         return
 
-        raise ValueError('Attempt to replace unknown child')
+        raise ValueError("Attempt to replace unknown child")
 
 
 class LeafNode(Node):
@@ -317,15 +404,15 @@ class LeafNode(Node):
 
     def __getitem__(self, key):
         ind = (key[0] - self.bounds[0], key[1] - self.bounds[0])
-        return self.data[ind[0][0]:ind[1][0],
-                         ind[0][1]:ind[1][1],
-                         ind[0][2]:ind[1][2]]
+        return self.data[
+            ind[0][0] : ind[1][0], ind[0][1] : ind[1][1], ind[0][2] : ind[1][2]
+        ]
 
     def __setitem__(self, key, value):
         ind = (key[0] - self.bounds[0], key[1] - self.bounds[0])
-        self.data[ind[0][0]:ind[1][0],
-                  ind[0][1]:ind[1][1],
-                  ind[0][2]:ind[1][2]] = value
+        self.data[
+            ind[0][0] : ind[1][0], ind[0][1] : ind[1][1], ind[0][2] : ind[1][2]
+        ] = value
 
 
 class UniformNode(Node):
@@ -338,8 +425,13 @@ class UniformNode(Node):
         return np.full(tuple(key[1] - key[0]), self.value, dtype=self.dtype)
 
     def map_copy(self, copy_parent, leaf_map, uniform_map):
-        copy = type(self)(copy_parent, self.bounds, copy_parent.get_volume().dtype,
-                          uniform_map(self.value), clip_bound=self.clip_bound)
+        copy = type(self)(
+            copy_parent,
+            self.bounds,
+            copy_parent.get_volume().dtype,
+            uniform_map(self.value),
+            clip_bound=self.clip_bound,
+        )
         return copy
 
 
@@ -350,17 +442,28 @@ class UniformBranchNode(UniformNode):
         for i in range(2):
             for j in range(2):
                 for k in range(2):
-                    child_bounds, child_clip_bound = replacement.get_child_bounds(i, j, k)
+                    child_bounds, child_clip_bound = replacement.get_child_bounds(
+                        i, j, k
+                    )
                     # If this child is entirely outside the clip bounds, it will never be accessed
                     # or populated and thus can be omitted.
-                    if child_clip_bound is not None and np.any(np.greater_equal(child_bounds[0], child_clip_bound)):
+                    if child_clip_bound is not None and np.any(
+                        np.greater_equal(child_bounds[0], child_clip_bound)
+                    ):
                         continue
                     child_shape = child_bounds[1] - child_bounds[0]
                     if np.any(np.less_equal(child_shape, volume.leaf_shape)):
-                        child = UniformLeafNode(replacement, child_bounds, self.dtype, self.value)
+                        child = UniformLeafNode(
+                            replacement, child_bounds, self.dtype, self.value
+                        )
                     else:
-                        child = UniformBranchNode(replacement, child_bounds, self.dtype, self.value,
-                                                  clip_bound=child_clip_bound)
+                        child = UniformBranchNode(
+                            replacement,
+                            child_bounds,
+                            self.dtype,
+                            self.value,
+                            clip_bound=child_clip_bound,
+                        )
                     replacement.children[i][j][k] = child
         self.replace(replacement)
         replacement[key] = value
