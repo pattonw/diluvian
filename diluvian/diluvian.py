@@ -89,7 +89,7 @@ def seeds_from_skeleton(filename):
                 ids.append([int(float(row[0])), None])
             else:
                 ids.append([int(float(x)) for x in row[:2]])
-    return coords, ids
+    return coords[::], ids
 
 
 def fill_volume_with_model(
@@ -758,10 +758,11 @@ def fill_skeleton_with_model_threaded(
     vol_name = list(volumes.keys())[0]
     volume = volumes[vol_name].downsample(CONFIG.volume.resolution)
     seeds, ids = seeds_from_skeleton(skeleton_file)
-    seeds = [
-        list(volume.world_coord_to_local(volume.real_coord_to_pixel(seed)))
-        for seed in seeds
-    ]
+    # seeds = [
+    #    list(volume.world_coord_to_local(volume.real_coord_to_pixel(seed)))
+    #    for seed in seeds
+    # ]
+    seeds = [list(volume.world_coord_to_local(seed)) for seed in seeds]
     nodes = [np.array(ids[i] + seeds[i]) for i in range(len(seeds))]
     skel = Skeleton(ids)
     region_shape = CONFIG.model.input_fov_shape
@@ -924,7 +925,7 @@ def fill_skeleton_with_model_threaded(
             skel.render_large_skeleton()
         elif s == "s":
             s = raw_input("Please enter the desired file name:\n")
-            skel.save_skeleton_mask_mesh(s)
+            skel.save_skeleton_masks(s)
         else:
             break
 
