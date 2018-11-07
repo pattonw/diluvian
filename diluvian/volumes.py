@@ -1536,10 +1536,10 @@ class ImageStackVolume(Volume):
         self.label_data = None
 
     def local_coord_to_world(self, a):
-        return a
+        return self.pixel_coord_to_real(np.matmul(a, self.scale))
 
     def world_coord_to_local(self, a):
-        return np.floor_divide(a, self.scale)
+        return np.floor_divide(self.real_coord_to_pixel(a), self.scale)
 
     def real_coord_to_pixel(self, a):
         return np.floor_divide(a - self.translation, self.orig_resolution)
