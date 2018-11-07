@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
-
-
-from __future__ import division
-from __future__ import print_function
-
 from collections import deque
 import logging
 from multiprocessing import Manager, Process
 import os
-from PIL import Image
 from pathlib import Path
 import random
 import tensorflow as tf
-import math
 
 import numpy as np
 import six
@@ -21,8 +14,9 @@ from tqdm import tqdm
 from .config import CONFIG
 from .volumes import SubvolumeBounds, ImageStackVolume, DownsampledVolume
 from .regions import Region
-from .skeletons import Skeleton
+from .skeleton_volume import Skeleton
 
+from .libpyn5 import read_n5
 
 BOUNDS = [
     np.array([0, 0, 0], dtype="int"),
@@ -35,16 +29,9 @@ IFOV = np.array([25, 97, 97], dtype="int")
 
 class FAFBStackVolume(ImageStackVolume):
     def image_populator(self, bounds):
+        """
         FAFB_imgs = (
-            "/groups"
-            + "/flyTEM"
-            + "/flyTEM"
-            + "/from_tier2_nearline"
-            + "/eric"
-            + "/working_sets"
-            + "/150625_segmentation_samples"
-            + "/sample_D_plus"
-            + "/cutout_10600x15850"
+            "/home/pattonw/Work/Data/FAFB_v13_D_plus.n5
         )
         image_subvol = np.zeros(tuple(bounds[1] - bounds[0]), dtype=np.float32)
         col_range = list(
@@ -115,8 +102,21 @@ class FAFBStackVolume(ImageStackVolume):
                         + tile_loc[self.DIM.X] : tile_sub[1][self.DIM.X]
                         + tile_loc[self.DIM.X],
                     ]
+        """
 
-        return image_subvol
+        img = (
+            np.array(
+                read_n5(
+                    "/home/pattonw/Work/Data/FAFB_v13_D_plus/D_plus.n5",
+                    "D_plus",
+                    list(bounds[0] - np.array([4000, 0, 0]))[::-1],
+                    list(bounds[1] - bounds[0])[::-1],
+                )
+            ).reshape(bounds[1] - bounds[0])
+            / 256
+        )
+
+        return img
 
     def real_coord_to_pixel(self, a):
         return np.floor_divide(a, self.orig_resolution) - self.translation
@@ -172,8 +172,8 @@ def seeds_from_skeleton(filename):
         with open(str(filename), newline="") as csvfile:
             reader = csv.reader(csvfile, delimiter=",", quotechar="|")
             for row in reader:
-                coords.append([int(float(x)) for x in row[2::-1]])
-                if row[1].strip() == "null" or row[1].strip() == "none":
+                coords.append([int(float(x)) for x in row[-1:1:-1]])
+                if row[1].strip().lower() == "null" or row[1].strip().lower() == "none":
                     ids.append([int(float(row[0])), None])
                 else:
                     ids.append([int(float(x)) for x in row[:2]])
@@ -328,15 +328,13 @@ def fill_skeleton_with_model_threaded(
     )
     volume = volume_a.downsample([35, 16, 16])
     seeds, ids = seeds_from_skeleton(skeleton_file)
-    seeds = [
-        list(volume.world_coord_to_local(volume_a.real_coord_to_pixel(seed)))
-        for seed in seeds
-    ]
+    seeds = [list(volume.world_coord_to_local(seed)) for seed in seeds]
     nodes = [np.array(list(ids[i]) + seeds[i]) for i in range(len(seeds))]
-    skel = Skeleton(ids)
-    tree_nids = [node.key for node in skel.tree.traverse()]
+    skel = Skeleton()
+    skel.io.input_nid_pid_x_y_z(nodes)
+    tree_nids = [node.key for node in skel.io.get_nodes()]
     nodes = list(filter(lambda x: x[0] in tree_nids, nodes))
-    region_shape = CONFIG.model.input_fov_shape + 2 * CONFIG.model.output_fov_shape // 4
+    region_shape = CONFIG.model.input_fov_shape
 
     pbar = tqdm(desc="Node queue", total=len(nodes), miniters=1, smoothing=0.0)
     num_nodes = len(nodes)
@@ -361,7 +359,7 @@ def fill_skeleton_with_model_threaded(
     def queue_next_node():
         total = 0
         for node in nodes:
-            if skel.is_filled(node[0]):
+            if skel.io.is_filled(node[0]):
                 # This seed has already been filled.
                 total += 1
                 continue
@@ -407,7 +405,11 @@ def fill_skeleton_with_model_threaded(
         workers.append(w)
 
     # For each seed, create region, fill, threshold, and merge to output volume.
+    k = 0
     while dispatched_nodes:
+        k += 1
+        if k > 10:
+            break
         processed_nodes = 1
         expected_node = dispatched_nodes.popleft()
         logging.debug("Expecting node %s", np.array_str(expected_node))
@@ -433,7 +435,7 @@ def fill_skeleton_with_model_threaded(
         logging.debug("Processing node at %s", np.array_str(node))
         pbar.update(processed_nodes)
 
-        if skel.is_filled(node[0]):
+        if skel.io.is_filled(node[0]):
             # This seed has already been filled.
             logging.debug(
                 "Node (%s) was filled but has been covered in the meantime.",
@@ -464,7 +466,7 @@ def fill_skeleton_with_model_threaded(
             start=node[2:] - np.floor_divide(region_shape, 2),
             stop=node[2:] + np.floor_divide(region_shape, 2) + 1,
         )
-        skel.fill(node[0], orig_bounds, body)
+        skel.io.fill(node[0], orig_bounds, body)
 
         logging.debug("Filled node (%s)", np.array_str(node))
 
@@ -475,7 +477,13 @@ def fill_skeleton_with_model_threaded(
     manager.shutdown()
 
     pbar.close()
-    skel.save_skeleton_masks(skeleton_file.name.split(".")[0])
+    skel.io.create_octrees(
+        tree_bounds=[[0, 0, 0], [7062, 15850 + 3 // 4, 10600 + 3 // 4]],
+        block_shape=[13, 128, 128],
+    )
+    skel.io.save_data_n5(
+        "/home/pattonw/Work/Segmentations/data/datasets.n5", "27884_downsampled_0"
+    )
 
 
 def run():
@@ -486,25 +494,25 @@ def run():
     tf.set_random_seed(CONFIG.random_seed)
 
     model_file = "trained_models/pattonw-v0/pattonw-v0.hdf5"
-    skeleton_file_path = Path("../tests/")
-    for skeleton_file in skeleton_file_path.iterdir():
-        if skeleton_file.name[:18] == "27884_downsampled_":
-            fill_skeleton_with_model_threaded(
-                model_file,
-                skeleton_file,
-                volumes=None,
-                partition=False,
-                augment=False,
-                bounds_input_file=None,
-                bias=True,
-                move_batch_size=1,
-                max_moves=None,
-                remask_interval=None,
-                sparse=False,
-                moves=None,
-                num_workers=8,
-                worker_prequeue=1,
-                reject_early_termination=False,
-                reject_non_seed_components=True,
-                save_output_file=None,
-            )
+    skeleton_file = Path(
+        "/home/pattonw/Work/Segmentations/data/skeletons/27884_downsampled_0.csv"
+    )
+    fill_skeleton_with_model_threaded(
+        model_file,
+        skeleton_file,
+        volumes=None,
+        partition=False,
+        augment=False,
+        bounds_input_file=None,
+        bias=True,
+        move_batch_size=1,
+        max_moves=5,
+        remask_interval=None,
+        sparse=False,
+        moves=None,
+        num_workers=1,
+        worker_prequeue=1,
+        reject_early_termination=False,
+        reject_non_seed_components=True,
+        save_output_file=None,
+    )
