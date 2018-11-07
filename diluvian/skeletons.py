@@ -566,9 +566,12 @@ class Skeleton(object):
                 return self.value["body"]
 
             def get_mask(self):
-                return self.value["body"].get_seeded_component(
-                    CONFIG.postprocessing.closing_shape
-                )
+                try:
+                    return self.value["body"].get_seeded_component(
+                        CONFIG.postprocessing.closing_shape
+                    )
+                except ValueError:
+                    return None
 
             def set_data(self, bounds, body):
                 self.set_bounds(bounds)
