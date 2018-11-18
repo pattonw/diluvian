@@ -52,12 +52,16 @@ class Skeleton:
             self.filled[nid] = True
 
         def save_masks(self, filename=""):
+            masks = []
+            nids = []
             for node in self.get_nodes():
                 try:
-                    mask = node.value.mask
-                    np.save(filename + "_" + node.key, mask)
+                    nids.append(node.key)
+                    masks.append(node.value.mask)
                 except AttributeError:
                     print("Node {} has no mask".format(node.key))
+            np.save(filename + "_masks", masks)
+            np.save(filename + "_nids", nids)
 
         def new_skeleton(self):
             return Skeleton()
