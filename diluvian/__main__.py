@@ -390,13 +390,6 @@ def _make_main_parser():
         help="Filename for the storage of the floodfilling output data.",
     )
 
-    fafb_parser = commandparsers.add_parser(
-        "FAFB",
-        parents=[common_parser, fill_common_parser, bounds_common_parser],
-        help="Seed periodically allong skeleton to look for false merges and missed branches.",
-    )
-    return parser
-
 
 def main():
     """Entry point for the diluvian command line interface."""

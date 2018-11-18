@@ -481,6 +481,7 @@ def fill_skeleton_with_model_threaded(
         tree_bounds=[[0, 0, 0], [7062, 15850 + 3 // 4, 10600 + 3 // 4]],
         block_shape=[13, 128, 128],
     )
+    skel.io.save_masks()
     skel.io.save_data_n5(
         "/home/pattonw/Work/Segmentations/data/datasets.n5", "27884_downsampled_0"
     )
@@ -488,6 +489,7 @@ def fill_skeleton_with_model_threaded(
 
 def run():
     CONFIG.from_toml("trained_models/pattonw-v0/pattonw-v0.toml")
+    CONFIG.model.move_priority = "proximity"
 
     random.seed(CONFIG.random_seed)
     np.random.seed(CONFIG.random_seed)

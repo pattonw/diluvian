@@ -73,7 +73,7 @@ class Region(object):
         return Region(subvolume.image,
                       target=target,
                       seed_vox=subvolume.seed,
-                      orig_bounds = subvolume.bounds,
+                      orig_bounds=subvolume.bounds,
                       **kwargs)
 
     @staticmethod

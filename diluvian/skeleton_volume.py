@@ -51,6 +51,14 @@ class Skeleton:
                 print("No seeded component this time mate!")
             self.filled[nid] = True
 
+        def save_masks(self, filename=""):
+            for node in self.get_nodes():
+                try:
+                    mask = node.value.mask
+                    np.save(filename + "_" + node.key, mask)
+                except AttributeError:
+                    print("Node {} has no mask".format(node.key))
+
         def new_skeleton(self):
             return Skeleton()
 
