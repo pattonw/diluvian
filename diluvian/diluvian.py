@@ -711,13 +711,11 @@ def fill_skeleton_with_model_threaded(
             ).image
 
             # Flood-fill and get resulting mask.
-            # Allow reading outside the image volume bounds to allow segmentation
-            # to fill all the way to the boundary.
             region = Region(
                 image,
                 seed_vox=np.floor_divide(np.array(image.shape), 2) + 1,
                 sparse_mask=False,
-                block_padding="reflect",
+                block_padding=None,
             )
             region.bias_against_merge = bias
             try:
