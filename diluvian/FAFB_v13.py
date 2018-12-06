@@ -25,7 +25,6 @@ BOUNDS = [
 RES = np.array([35, 4, 4], dtype="int")
 TRANS = np.array([0, 50900, 120200], dtype="int")
 IFOV = np.array([25, 97, 97], dtype="int")
-RETRY_SEEDS = True
 
 
 class FAFBStackVolume(ImageStackVolume):
@@ -268,80 +267,39 @@ def fill_skeleton_with_model_threaded(
                 "stop: {0}".format(node[2:] + np.floor_divide(region_shape, 2) + 1)
             )
 
-            current_node = node
-            current_image = volume.get_subvolume(
+            print(node)
+            image = volume.get_subvolume(
                 SubvolumeBounds(
-                    start=(current_node[2:]) - np.floor_divide(region_shape, 2),
-                    stop=(current_node[2:]) + np.floor_divide(region_shape, 2) + 1,
-                    node_id=current_node[0:2],
+                    start=(node[2:]) - np.floor_divide(region_shape, 2),
+                    stop=(node[2:]) + np.floor_divide(region_shape, 2) + 1,
+                    node_id=node[0:2],
                 )
             ).image
-            while True:
-                # Flood-fill and get resulting mask.
-                # Allow reading outside the image volume bounds to allow segmentation
-                # to fill all the way to the boundary.
-                region = Region(
-                    current_image,
-                    seed_vox=np.floor_divide(np.array(current_image.shape), 2) + 1,
-                    sparse_mask=False,
-                    block_padding=None,
+
+            # Flood-fill and get resulting mask.
+            # Allow reading outside the image volume bounds to allow segmentation
+            # to fill all the way to the boundary.
+            region = Region(
+                image,
+                seed_vox=np.floor_divide(np.array(image.shape), 2) + 1,
+                sparse_mask=False,
+                block_padding="reflect",
+            )
+            region.bias_against_merge = bias
+            try:
+                six.next(
+                    region.fill(
+                        model,
+                        move_batch_size=move_batch_size,
+                        max_moves=max_moves,
+                        stopping_callback=stopping_callback,
+                        remask_interval=remask_interval,
+                    )
                 )
-                region.bias_against_merge = bias
-                try:
-                    six.next(
-                        region.fill(
-                            model,
-                            move_batch_size=move_batch_size,
-                            max_moves=max_moves,
-                            stopping_callback=stopping_callback,
-                            remask_interval=remask_interval,
-                        )
-                    )
-                except Region.EarlyFillTermination:
-                    logging.debug(
-                        "Worker %s: node %s failed to fill", worker_id, str(node)
-                    )
-                except StopIteration:
-                    pass
-                if RETRY_SEEDS and not body.is_seed_in_mask():
-                    attempts = 0
-                    while attempts < 3:
-                        current_node = node
-                        a, b, c = (
-                            random.randint(-1, 1),
-                            random.randint(-1, 1),
-                            random.randint(-1, 1),
-                        )
-                        while a == b == c == 0:
-                            a, b, c = (
-                                random.randint(-1, 1),
-                                random.randint(-1, 1),
-                                random.randint(-1, 1),
-                            )
-                        current_node[2] += a
-                        current_node[3] += b
-                        current_node[4] += c
-
-                        try:
-                            current_image = volume.get_subvolume(
-                                SubvolumeBounds(
-                                    start=(current_node[2:])
-                                    - np.floor_divide(region_shape, 2),
-                                    stop=(current_node[2:])
-                                    + np.floor_divide(region_shape, 2)
-                                    + 1,
-                                    node_id=current_node[0:2],
-                                )
-                            ).image
-                            logging.debug(
-                                "Retrying seed %s as %s", str(node), str(current_node)
-                            )
-                            break
-                        except:
-                            attempts += 1
-                else:
-                    break
-
+            except Region.EarlyFillTermination:
+                logging.debug("Worker %s: node %s failed to fill", worker_id, str(node))
+            except StopIteration:
+                pass
             logging.debug("Worker %s: node %s filled", worker_id, str(node))
 
             results.put((node, region.to_body()))
