@@ -142,6 +142,7 @@ def test_volume_transforms_image_stacks():
         "resolution": [3.8, 3.8, 50],
         "tile_width": 512,
         "tile_height": 512,
+        "translation": [0, 0, 0]
     }
     # tile stack parameters
     tsp = {
