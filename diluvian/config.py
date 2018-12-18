@@ -184,6 +184,7 @@ class NetworkConfig(BaseConfig):
     resolution: sequence or ndarray of int
         The resolution of the input image data. This is necessary if you want
         to use "as_needed" for ``unet_downsampling_mode``
+    coord_layer: whether to include coordinate channels in the input
     """
     def __init__(self, settings):
         self.factory = str(settings.get('factory'))
@@ -204,6 +205,7 @@ class NetworkConfig(BaseConfig):
 
         self.unet_downsample_mode = np.array(settings.get("unet_downsample_mode", "fixed_rate"))
         self.resolution = np.array(settings.get("resolution", [1, 1, 1]))
+        self.coord_layer = np.array(settings.get("coord_layer", False))
 
 class OptimizerConfig(BaseConfig):
     """Configuration for the network optimizer.
