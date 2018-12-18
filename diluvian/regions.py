@@ -271,7 +271,7 @@ class Region(object):
         ctr = np.asarray(mask.shape) // 2
         neigh_min = ctr - self.MOVE_DELTA
         neigh_max = ctr + self.MOVE_DELTA + 1
-        neighborhood = mask[map(slice, neigh_min, neigh_max)]
+        neighborhood = mask[list(map(slice, neigh_min, neigh_max))]
         return np.nanmax(neighborhood) >= CONFIG.model.t_move
 
     def add_mask(self, mask_block, mask_pos):
@@ -370,7 +370,7 @@ class Region(object):
         if np.any(pad_pre) or np.any(pad_post):
             assert self.block_padding is not None, \
                 'Position block extends out of region bounds, but padding is not enabled: {}'.format(next_pos)
-            pad_width = zip(list(pad_pre), list(pad_post))
+            pad_width = list(zip(list(pad_pre), list(pad_post)))
             image_block = np.pad(image_block, pad_width, self.block_padding)
             mask_block = np.pad(mask_block, pad_width, self.block_padding)
 
@@ -381,7 +381,7 @@ class Region(object):
                                        block_min[1]:block_max[1],
                                        block_min[2]:block_max[2]]
             if np.any(pad_pre) or np.any(pad_post):
-                pad_width = zip(list(pad_pre), list(pad_post))
+                pad_width = list(zip(list(pad_pre), list(pad_post)))
                 target_block = np.pad(target_block, pad_width, self.block_padding)
         else:
             target_block = None
@@ -667,15 +667,15 @@ class Region(object):
                     changed_images.append(im)
             images['last'] = vox_round
 
-            for plane in axes.iterkeys():
+            for plane in axes.keys():
                 lines['h'][plane].set_ydata(get_hv(vox - margin, plane)['h'])
                 lines['v'][plane].set_xdata(get_hv(vox + margin, plane)['v'])
                 lines['bl'][plane].set_xdata(get_hv(vox - margin, plane)['v'])
                 lines['bt'][plane].set_ydata(get_hv(vox + margin, plane)['h'])
 
             return changed_images + \
-                lines['h'].values() + lines['v'].values() + \
-                lines['bl'].values() + lines['bt'].values()
+                list(lines['h'].values()) + list(lines['v'].values()) + \
+                list(lines['bl'].values()) + list(lines['bt'].values())
 
         update_fn.moves = 0
         update_fn.next_pos_vox = current_vox
