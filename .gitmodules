@@ -1,0 +1,3 @@
+[submodule "diluvian/ffskel"]
+	path = diluvian/ffskel
+	url = git@github.com:pattonw/ffskel.git
