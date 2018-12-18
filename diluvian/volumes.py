@@ -25,7 +25,7 @@ from .octrees import OctreeVolume
 from .util import get_nonzero_aabb
 
 
-DimOrder = namedtuple('DimOrder', ('X', 'Y', 'Z'))
+DimOrder = namedtuple("DimOrder", ("X", "Y", "Z"))
 
 
 def partition_volumes(volumes, downsample=True):
@@ -47,13 +47,22 @@ def partition_volumes(volumes, downsample=True):
     training_volumes, validation_volumes : dict
         Dictionary mapping volume name to partitioned, downsampled volumes.
     """
+
     def apply_partitioning(volumes, partitioning):
         partitioned = {}
         for name, vol in six.iteritems(volumes):
-            partitions = [p for rgx, p in CONFIG.training.partitions.items() if re.match(rgx, name)]
-            partition_index = [idx for rgx, idx in partitioning.items() if re.match(rgx, name)]
+            partitions = [
+                p
+                for rgx, p in CONFIG.training.partitions.items()
+                if re.match(rgx, name)
+            ]
+            partition_index = [
+                idx for rgx, idx in partitioning.items() if re.match(rgx, name)
+            ]
             if len(partitions) > 1 or len(partition_index) > 1:
-                raise ValueError('Volume "{}" matches more than one partition specifier'.format(name))
+                raise ValueError(
+                    'Volume "{}" matches more than one partition specifier'.format(name)
+                )
             elif len(partitions) == 1 and len(partition_index) == 1:
                 v = vol.partition(partitions[0], partition_index[0])
                 if downsample:
@@ -63,17 +72,24 @@ def partition_volumes(volumes, downsample=True):
         return partitioned
 
     training_volumes = apply_partitioning(volumes, CONFIG.training.training_partition)
-    validation_volumes = apply_partitioning(volumes, CONFIG.training.validation_partition)
+    validation_volumes = apply_partitioning(
+        volumes, CONFIG.training.validation_partition
+    )
 
     return training_volumes, validation_volumes
 
 
 class SubvolumeBounds(object):
     """Sufficient parameters to extract a subvolume from a volume."""
-    __slots__ = ('start', 'stop', 'seed', 'label_id', 'label_margin',)
 
-    def __init__(self, start=None, stop=None, seed=None, label_id=None, label_margin=None):
-        assert (start is not None and stop is not None) or seed is not None, "Bounds or seed must be provided"
+    __slots__ = ("start", "stop", "seed", "label_id", "label_margin")
+
+    def __init__(
+        self, start=None, stop=None, seed=None, label_id=None, label_margin=None
+    ):
+        assert (
+            start is not None and stop is not None
+        ) or seed is not None, "Bounds or seed must be provided"
         self.start = start
         self.stop = stop
         self.seed = seed
@@ -85,14 +101,14 @@ class SubvolumeBounds(object):
     @classmethod
     def iterable_from_csv(cls, filename):
         bounds = []
-        with open(filename, 'r') as csvfile:
+        with open(filename, "r") as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
                 for k, v in six.iteritems(row):
                     if not v:
                         row[k] = None
-                    elif v[0] == '[':
-                        row[k] = np.fromstring(v[1:-1], sep=' ', dtype=np.int64)
+                    elif v[0] == "[":
+                        row[k] = np.fromstring(v[1:-1], sep=" ", dtype=np.int64)
                     else:
                         row[k] = int(v)
                 bounds.append(cls(**row))
@@ -101,7 +117,7 @@ class SubvolumeBounds(object):
 
     @classmethod
     def iterable_to_csv(cls, bounds, filename):
-        with open(filename, 'w') as csvfile:
+        with open(filename, "w") as csvfile:
             fieldnames = cls.__slots__
             writer = csv.writer(csvfile)
             writer.writerow(fieldnames)
@@ -111,7 +127,8 @@ class SubvolumeBounds(object):
 
 class Subvolume(object):
     """A subvolume of image data and an optional ground truth object mask."""
-    __slots__ = ('image', 'label_mask', 'seed', 'label_id',)
+
+    __slots__ = ("image", "label_mask", "seed", "label_id")
 
     def __init__(self, image, label_mask, seed, label_id):
         self.image = image
@@ -130,7 +147,10 @@ class Subvolume(object):
         return np.count_nonzero(self.label_mask) / float(self.label_mask.size)
 
     def has_seed_in_mask(self):
-        ctr = self.seed - (np.asarray(self.image.shape) - np.asarray(self.label_mask.shape)) // 2
+        ctr = (
+            self.seed
+            - (np.asarray(self.image.shape) - np.asarray(self.label_mask.shape)) // 2
+        )
         return self.label_mask[tuple(ctr)]
 
     def has_uniform_seed_margin(self, seed_margin=20.0):
@@ -147,19 +167,26 @@ class Subvolume(object):
         bool
             True if the rectangular margin around the seed position is uniform.
         """
-        margin = np.ceil(np.reciprocal(np.array(CONFIG.volume.resolution),
-                                       dtype=np.float64) * seed_margin).astype(np.int64)
+        margin = np.ceil(
+            np.reciprocal(np.array(CONFIG.volume.resolution), dtype=np.float64)
+            * seed_margin
+        ).astype(np.int64)
 
         mask_target = self.label_mask
         # If data is unlabeled, can not test so always succeed.
         if mask_target is None:
             return True
         # Seed location in the mask accounting for offset of label from image.
-        ctr = self.seed - (np.asarray(self.image.shape) - np.asarray(mask_target.shape)) // 2
+        ctr = (
+            self.seed
+            - (np.asarray(self.image.shape) - np.asarray(mask_target.shape)) // 2
+        )
         seed_fov = (ctr - margin, ctr + margin + 1)
-        seed_region = mask_target[seed_fov[0][0]:seed_fov[1][0],
-                                  seed_fov[0][1]:seed_fov[1][1],
-                                  seed_fov[0][2]:seed_fov[1][2]]
+        seed_region = mask_target[
+            seed_fov[0][0] : seed_fov[1][0],
+            seed_fov[0][1] : seed_fov[1][1],
+            seed_fov[0][2] : seed_fov[1][2],
+        ]
         return np.all(seed_region)
 
 
@@ -171,6 +198,7 @@ class SubvolumeGenerator(six.Iterator):
     volume : Volume
     bounds_generator : SubvolumeBoundsGenerator
     """
+
     def __init__(self, volume, bounds_generator):
         self.volume = volume
         self.bounds_generator = bounds_generator
@@ -208,7 +236,9 @@ class ErodedMaskGenerator(six.Iterator):
         while True:
             subv = six.next(self.subvolume_generator)
 
-            subv.label_mask = ndimage.binary_erosion(subv.label_mask, structure=self.sel, border_value=1)
+            subv.label_mask = ndimage.binary_erosion(
+                subv.label_mask, structure=self.sel, border_value=1
+            )
 
             if subv.has_seed_in_mask():
                 return subv
@@ -232,7 +262,9 @@ class RelabelSeedComponentGenerator(six.Iterator):
         subv = six.next(self.subvolume_generator)
 
         label_im, _ = ndimage.label(subv.label_mask)
-        label_axis_margin = (np.array(subv.image.shape) - np.array(subv.label_mask.shape)) // 2
+        label_axis_margin = (
+            np.array(subv.image.shape) - np.array(subv.label_mask.shape)
+        ) // 2
         seed_label = label_im[tuple(subv.seed - label_axis_margin)]
 
         subv.label_mask = label_im == seed_label
@@ -250,6 +282,7 @@ class SubvolumeAugmentGenerator(six.Iterator):
         If true, return both the original and augmented volume in sequence.
         If false, return either with equal probability.
     """
+
     def __init__(self, subvolume_generator, return_both):
         self.subvolume_generator = subvolume_generator
         self.return_both = return_both
@@ -291,7 +324,7 @@ class SubvolumeAugmentGenerator(six.Iterator):
                     return subv
 
     def augment_subvolume(self):
-        raise NotImplementedError('Subclasses must implement this method.')
+        raise NotImplementedError("Subclasses must implement this method.")
 
 
 class ClipSubvolumeImageGenerator(six.Iterator):
@@ -304,6 +337,7 @@ class ClipSubvolumeImageGenerator(six.Iterator):
     subvolume_generator : SubvolumeGenerator
     min_val, max_val : float, optional
     """
+
     def __init__(self, subvolume_generator, min_val=0.0, max_val=1.0):
         self.subvolume_generator = subvolume_generator
         self.min_val = min_val
@@ -321,10 +355,12 @@ class ClipSubvolumeImageGenerator(six.Iterator):
 
     def __next__(self):
         subv = six.next(self.subvolume_generator)
-        return Subvolume(np.clip(subv.image, self.min_val, self.max_val),
-                         subv.label_mask,
-                         subv.seed,
-                         subv.label_id)
+        return Subvolume(
+            np.clip(subv.image, self.min_val, self.max_val),
+            subv.label_mask,
+            subv.seed,
+            subv.label_id,
+        )
 
 
 class MirrorAugmentGenerator(SubvolumeAugmentGenerator):
@@ -342,6 +378,7 @@ class MirrorAugmentGenerator(SubvolumeAugmentGenerator):
         If false, return either with equal probability.
     axis : int
     """
+
     def __init__(self, subvolume_generator, return_both, axis):
         super(MirrorAugmentGenerator, self).__init__(subvolume_generator, return_both)
         self.axis = axis
@@ -351,10 +388,14 @@ class MirrorAugmentGenerator(SubvolumeAugmentGenerator):
         shape = subv.image.shape[self.axis]
         seed = subv.seed.copy()
         seed[self.axis] = shape - subv.seed[self.axis] - 1
-        subv = Subvolume(np.flip(subv.image, self.axis),
-                         np.flip(subv.label_mask, self.axis) if subv.label_mask is not None else None,
-                         seed,
-                         subv.label_id)
+        subv = Subvolume(
+            np.flip(subv.image, self.axis),
+            np.flip(subv.label_mask, self.axis)
+            if subv.label_mask is not None
+            else None,
+            seed,
+            subv.label_id,
+        )
         return subv
 
 
@@ -373,16 +414,23 @@ class PermuteAxesAugmentGenerator(SubvolumeAugmentGenerator):
         If false, return either with equal probability.
     axes : sequence of int
     """
+
     def __init__(self, subvolume_generator, return_both, axes):
-        super(PermuteAxesAugmentGenerator, self).__init__(subvolume_generator, return_both)
+        super(PermuteAxesAugmentGenerator, self).__init__(
+            subvolume_generator, return_both
+        )
         self.axes = list(axes)
 
     def augment_subvolume(self):
         subv = self.subvolume
-        subv = Subvolume(np.transpose(subv.image, self.axes),
-                         np.transpose(subv.label_mask, self.axes) if subv.label_mask is not None else None,
-                         subv.seed[self.axes],
-                         self.subvolume.label_id)
+        subv = Subvolume(
+            np.transpose(subv.image, self.axes),
+            np.transpose(subv.label_mask, self.axes)
+            if subv.label_mask is not None
+            else None,
+            subv.seed[self.axes],
+            self.subvolume.label_id,
+        )
         return subv
 
 
@@ -405,8 +453,13 @@ class MissingDataAugmentGenerator(SubvolumeAugmentGenerator):
     remove_label : bool
         Whether to also remove label mask data.
     """
-    def __init__(self, subvolume_generator, return_both, axis, probability, remove_label=False):
-        super(MissingDataAugmentGenerator, self).__init__(subvolume_generator, return_both)
+
+    def __init__(
+        self, subvolume_generator, return_both, axis, probability, remove_label=False
+    ):
+        super(MissingDataAugmentGenerator, self).__init__(
+            subvolume_generator, return_both
+        )
         self.axis = axis
         self.probability = probability
         self.remove_label = remove_label
@@ -419,19 +472,24 @@ class MissingDataAugmentGenerator(SubvolumeAugmentGenerator):
 
         if missing_sections and missing_sections[0].size:
             subv = self.subvolume
-            mask = subv.label_mask.copy() if subv.label_mask is not None and self.remove_label else subv.label_mask
-            subv = Subvolume(subv.image.copy(),
-                             mask,
-                             subv.seed,
-                             subv.label_id)
+            mask = (
+                subv.label_mask.copy()
+                if subv.label_mask is not None and self.remove_label
+                else subv.label_mask
+            )
+            subv = Subvolume(subv.image.copy(), mask, subv.seed, subv.label_id)
             slices = [slice(None), slice(None), slice(None)]
             slices[self.axis] = missing_sections
             subv.image[slices] = 0
             if self.remove_label:
-                label_axis_margin = (subv.image.shape[self.axis] - subv.label_mask.shape[self.axis]) // 2
+                label_axis_margin = (
+                    subv.image.shape[self.axis] - subv.label_mask.shape[self.axis]
+                ) // 2
                 label_sections = missing_sections[0] - label_axis_margin
-                label_sections = label_sections[(label_sections >= 0) &
-                                                (label_sections < subv.label_mask.shape[self.axis])]
+                label_sections = label_sections[
+                    (label_sections >= 0)
+                    & (label_sections < subv.label_mask.shape[self.axis])
+                ]
                 slices[self.axis] = (label_sections,)
                 subv.label_mask[slices] = False
             return subv
@@ -463,8 +521,13 @@ class GaussianNoiseAugmentGenerator(SubvolumeAugmentGenerator):
     multiplicative : float
         Standard deviation for 0-mean Gaussian additive noise.
     """
-    def __init__(self, subvolume_generator, return_both, axis, multiplicative, additive):
-        super(GaussianNoiseAugmentGenerator, self).__init__(subvolume_generator, return_both)
+
+    def __init__(
+        self, subvolume_generator, return_both, axis, multiplicative, additive
+    ):
+        super(GaussianNoiseAugmentGenerator, self).__init__(
+            subvolume_generator, return_both
+        )
         self.axis = axis
         self.multiplicative = multiplicative
         self.additive = additive
@@ -478,13 +541,20 @@ class GaussianNoiseAugmentGenerator(SubvolumeAugmentGenerator):
         shape_xform[self.axis] = -1
 
         dim_size = 1 if self.axis == -1 else self.shape[self.axis]
-        mul_noise = np.random.normal(1.0, self.multiplicative, dim_size).astype(subv.image.dtype)
-        add_noise = np.random.normal(0.0, self.additive, dim_size).astype(subv.image.dtype)
+        mul_noise = np.random.normal(1.0, self.multiplicative, dim_size).astype(
+            subv.image.dtype
+        )
+        add_noise = np.random.normal(0.0, self.additive, dim_size).astype(
+            subv.image.dtype
+        )
 
-        subv = Subvolume(subv.image * mul_noise.reshape(shape_xform) + add_noise.reshape(shape_xform),
-                         subv.label_mask,
-                         subv.seed,
-                         subv.label_id)
+        subv = Subvolume(
+            subv.image * mul_noise.reshape(shape_xform)
+            + add_noise.reshape(shape_xform),
+            subv.label_mask,
+            subv.seed,
+            subv.label_id,
+        )
         return subv
 
 
@@ -513,8 +583,18 @@ class ContrastAugmentGenerator(SubvolumeAugmentGenerator):
     scaling_mean, scaling_std, center_mean, center_std : float
         Normal distribution parameters for the rescaling of intensity values.
     """
-    def __init__(self, subvolume_generator, return_both, axis, probability,
-                 scaling_mean, scaling_std, center_mean, center_std):
+
+    def __init__(
+        self,
+        subvolume_generator,
+        return_both,
+        axis,
+        probability,
+        scaling_mean,
+        scaling_std,
+        center_mean,
+        center_std,
+    ):
         super(ContrastAugmentGenerator, self).__init__(subvolume_generator, return_both)
         self.axis = axis
         self.probability = probability
@@ -529,10 +609,9 @@ class ContrastAugmentGenerator(SubvolumeAugmentGenerator):
 
         if sections and sections[0].size:
             subv = self.subvolume
-            subv = Subvolume(subv.image.copy(),
-                             subv.label_mask,
-                             subv.seed,
-                             subv.label_id)
+            subv = Subvolume(
+                subv.image.copy(), subv.label_mask, subv.seed, subv.label_id
+            )
             slices = [slice(None), slice(None), slice(None)]
             slices[self.axis] = sections
             data = subv.image[slices]
@@ -540,7 +619,11 @@ class ContrastAugmentGenerator(SubvolumeAugmentGenerator):
             old_max = data.max()
             scaling = np.random.normal(self.scaling_mean, self.scaling_std)
             center = np.random.normal(self.center_mean, self.center_std)
-            data = scaling*(data - old_min) + 0.5*scaling*center*(old_max - old_min) + old_min
+            data = (
+                scaling * (data - old_min)
+                + 0.5 * scaling * center * (old_max - old_min)
+                + old_min
+            )
             subv.image[slices] = data
             return subv
         else:
@@ -571,22 +654,36 @@ class MaskedArtifactAugmentGenerator(SubvolumeAugmentGenerator):
         as an alpha for blending image data from this artifact file with
         the original subvolume image data.
     """
-    def __init__(self, subvolume_generator, return_both, axis, probability, artifact_volume_file, cache):
-        super(MaskedArtifactAugmentGenerator, self).__init__(subvolume_generator, return_both)
+
+    def __init__(
+        self,
+        subvolume_generator,
+        return_both,
+        axis,
+        probability,
+        artifact_volume_file,
+        cache,
+    ):
+        super(MaskedArtifactAugmentGenerator, self).__init__(
+            subvolume_generator, return_both
+        )
         self.axis = axis
         self.probability = probability
-        if 'artifacts' not in cache:
-            vol = HDF5Volume.from_toml(artifact_volume_file)['Artifacts']
-            cache['mask'] = NdarrayVolume(
-                    vol.world_coord_to_local(vol.resolution),
-                    image_data=vol.world_mat_to_local(vol.mask_data[:]))
+        if "artifacts" not in cache:
+            vol = HDF5Volume.from_toml(artifact_volume_file)["Artifacts"]
+            cache["mask"] = NdarrayVolume(
+                vol.world_coord_to_local(vol.resolution),
+                image_data=vol.world_mat_to_local(vol.mask_data[:]),
+            )
             vol.mask_data = None
-            cache['artifacts'] = vol.to_memory_volume()
-        self.mask = cache['mask']
-        self.artifacts = cache['artifacts']
+            cache["artifacts"] = vol.to_memory_volume()
+        self.mask = cache["mask"]
+        self.artifacts = cache["artifacts"]
         artifact_shape = self.shape.copy()
         artifact_shape[self.axis] = 1
-        self.art_bounds_gen = self.artifacts.subvolume_bounds_generator(shape=artifact_shape)
+        self.art_bounds_gen = self.artifacts.subvolume_bounds_generator(
+            shape=artifact_shape
+        )
 
     def augment_subvolume(self):
         rolls = np.random.sample(self.shape[self.axis])
@@ -594,10 +691,9 @@ class MaskedArtifactAugmentGenerator(SubvolumeAugmentGenerator):
 
         if artifact_sections and artifact_sections[0].size:
             subv = self.subvolume
-            subv = Subvolume(subv.image.copy(),
-                             subv.label_mask,
-                             subv.seed,
-                             subv.label_id)
+            subv = Subvolume(
+                subv.image.copy(), subv.label_mask, subv.seed, subv.label_id
+            )
             slices = [slice(None), slice(None), slice(None)]
             for z in artifact_sections[0]:
                 slices[self.axis] = z
@@ -659,12 +755,16 @@ class Volume(object):
         resolution = np.asarray(resolution)
         downsample = np.log2(np.true_divide(resolution, self.resolution))
         if np.any(downsample < 0):
-            raise ValueError('Requested resolution ({}) is higher than volume resolution ({}). '
-                             'Upsampling is not supported.'.format(resolution, self.resolution))
+            raise ValueError(
+                "Requested resolution ({}) is higher than volume resolution ({}). "
+                "Upsampling is not supported.".format(resolution, self.resolution)
+            )
         if not np.all(np.equal(np.mod(downsample, 1), 0)):
-            raise ValueError('Requested resolution ({}) is not a power-of-2 downsample of '
-                             'volume resolution ({}). '
-                             'This is currently unsupported.'.format(resolution, self.resolution))
+            raise ValueError(
+                "Requested resolution ({}) is not a power-of-2 downsample of "
+                "volume resolution ({}). "
+                "This is currently unsupported.".format(resolution, self.resolution)
+            )
         return downsample.astype(np.int64)
 
     def downsample(self, resolution):
@@ -674,7 +774,9 @@ class Volume(object):
         return DownsampledVolume(self, downsample)
 
     def partition(self, partitioning, partition_index):
-        if np.array_equal(partitioning, np.ones(3)) and np.array_equal(partition_index, np.zeros(3)):
+        if np.array_equal(partitioning, np.ones(3)) and np.array_equal(
+            partition_index, np.zeros(3)
+        ):
             return self
         return PartitionedVolume(self, partitioning, partition_index)
 
@@ -687,18 +789,21 @@ class Volume(object):
     def subvolume_generator(self, bounds_generator=None, **kwargs):
         if bounds_generator is None:
             if not kwargs:
-                raise ValueError('Bounds generator arguments must be provided if no bounds generator is provided.')
+                raise ValueError(
+                    "Bounds generator arguments must be provided if no bounds generator is provided."
+                )
             bounds_generator = self.subvolume_bounds_generator(**kwargs)
         return SubvolumeGenerator(self, bounds_generator)
 
     def get_subvolume(self, bounds):
         if bounds.start is None or bounds.stop is None:
-            raise ValueError('This volume does not support sparse subvolume access.')
+            raise ValueError("This volume does not support sparse subvolume access.")
 
         image_subvol = self.image_data[
-                bounds.start[0]:bounds.stop[0],
-                bounds.start[1]:bounds.stop[1],
-                bounds.start[2]:bounds.stop[2]]
+            bounds.start[0] : bounds.stop[0],
+            bounds.start[1] : bounds.stop[1],
+            bounds.start[2] : bounds.stop[2],
+        ]
 
         image_subvol = self.world_mat_to_local(image_subvol)
         if np.issubdtype(image_subvol.dtype, np.integer):
@@ -713,9 +818,10 @@ class Volume(object):
             label_stop = bounds.stop - bounds.label_margin
 
             label_subvol = self.label_data[
-                    label_start[0]:label_stop[0],
-                    label_start[1]:label_stop[1],
-                    label_start[2]:label_stop[2]]
+                label_start[0] : label_stop[0],
+                label_start[1] : label_stop[1],
+                label_start[2] : label_stop[2],
+            ]
 
             label_subvol = self.world_mat_to_local(label_subvol)
 
@@ -739,7 +845,9 @@ class Volume(object):
             self.label_margin = label_margin
             self.skip_blank_sections = True
             self.ctr_min = self.margin
-            self.ctr_max = (np.array(self.volume.shape) - self.margin - 1).astype(np.int64)
+            self.ctr_max = (np.array(self.volume.shape) - self.margin - 1).astype(
+                np.int64
+            )
             self.random = np.random.RandomState(CONFIG.random_seed)
 
             # If the volume has a mask channel, further limit ctr_min and
@@ -751,11 +859,18 @@ class Volume(object):
                 mask_max = self.volume.world_coord_to_local(mask_max)
 
                 self.ctr_min = np.maximum(self.ctr_min, mask_min + self.label_margin)
-                self.ctr_max = np.minimum(self.ctr_max, mask_max - self.label_margin - 1)
+                self.ctr_max = np.minimum(
+                    self.ctr_max, mask_max - self.label_margin - 1
+                )
 
             if np.any(self.ctr_min >= self.ctr_max):
-                raise ValueError('Cannot generate subvolume bounds: bounds ({}, {}) too small for shape ({})'.format(
-                                 np.array_str(self.ctr_min), np.array_str(self.ctr_max), np.array_str(self.shape)))
+                raise ValueError(
+                    "Cannot generate subvolume bounds: bounds ({}, {}) too small for shape ({})".format(
+                        np.array_str(self.ctr_min),
+                        np.array_str(self.ctr_max),
+                        np.array_str(self.shape),
+                    )
+                )
 
         def __iter__(self):
             return self
@@ -765,28 +880,42 @@ class Volume(object):
 
         def __next__(self):
             while True:
-                ctr = np.array([self.random.randint(self.ctr_min[n], self.ctr_max[n])
-                                for n in range(3)]).astype(np.int64)
+                ctr = np.array(
+                    [
+                        self.random.randint(self.ctr_min[n], self.ctr_max[n])
+                        for n in range(3)
+                    ]
+                ).astype(np.int64)
                 start = ctr - self.margin
                 stop = ctr + self.margin + np.mod(self.shape, 2).astype(np.int64)
 
                 # If the volume has a mask channel, only accept subvolumes
                 # entirely contained in it.
                 if self.volume.mask_data is not None:
-                    start_local = self.volume.world_coord_to_local(start + self.label_margin)
-                    stop_local = self.volume.world_coord_to_local(stop - self.label_margin)
+                    start_local = self.volume.world_coord_to_local(
+                        start + self.label_margin
+                    )
+                    stop_local = self.volume.world_coord_to_local(
+                        stop - self.label_margin
+                    )
                     mask = self.volume.mask_data[
-                            start_local[0]:stop_local[0],
-                            start_local[1]:stop_local[1],
-                            start_local[2]:stop_local[2]]
+                        start_local[0] : stop_local[0],
+                        start_local[1] : stop_local[1],
+                        start_local[2] : stop_local[2],
+                    ]
                     if not mask.all():
-                        logging.debug('Skipping subvolume not entirely in mask.')
+                        logging.debug("Skipping subvolume not entirely in mask.")
                         continue
 
                 # Skip subvolumes with seeds in blank sections.
                 if self.skip_blank_sections and self.volume.image_data is not None:
-                    if self.volume.image_data[tuple(self.volume.local_coord_to_world(ctr))] == 0:
-                        logging.debug('Skipping subvolume with seed in blank section.')
+                    if (
+                        self.volume.image_data[
+                            tuple(self.volume.local_coord_to_world(ctr))
+                        ]
+                        == 0
+                    ):
+                        logging.debug("Skipping subvolume with seed in blank section.")
                         continue
 
                 # Only accept subvolumes where the central seed voxel will be
@@ -798,14 +927,17 @@ class Volume(object):
                 seed_min = self.volume.local_coord_to_world(ctr)
                 seed_max = self.volume.local_coord_to_world(ctr + 1)
                 label_ids = self.volume.label_data[
-                        seed_min[0]:seed_max[0],
-                        seed_min[1]:seed_max[1],
-                        seed_min[2]:seed_max[2]]
+                    seed_min[0] : seed_max[0],
+                    seed_min[1] : seed_max[1],
+                    seed_min[2] : seed_max[2],
+                ]
                 if (label_ids == label_ids.item(0)).all():
                     label_id = label_ids.item(0)
                     break
 
-            return SubvolumeBounds(start, stop, label_id=label_id, label_margin=self.label_margin)
+            return SubvolumeBounds(
+                start, stop, label_id=label_id, label_margin=self.label_margin
+            )
 
 
 class NdarrayVolume(Volume):
@@ -815,6 +947,7 @@ class NdarrayVolume(Volume):
     exists mostly as a bookkeeping convenience to make actual ndarray volumes
     explicit.
     """
+
     def __init__(self, *args, **kwargs):
         super(NdarrayVolume, self).__init__(*args, **kwargs)
         self.image_data.flags.writeable = False
@@ -852,14 +985,22 @@ class VolumeView(Volume):
 
     def get_subvolume(self, bounds):
         # assumes bounds given are in local coordinates
-        parent_start = self.local_to_parent(bounds.start) if bounds.start is not None else None
-        parent_stop = self.local_to_parent(bounds.stop) if bounds.stop is not None else None
-        parent_seed = self.local_to_parent(bounds.seed) if bounds.seed is not None else None
-        parent_bounds = SubvolumeBounds(start=parent_start,
-                                        stop=parent_stop,
-                                        seed=parent_seed,
-                                        label_id=bounds.label_id,
-                                        label_margin=bounds.label_margin)
+        parent_start = (
+            self.local_to_parent(bounds.start) if bounds.start is not None else None
+        )
+        parent_stop = (
+            self.local_to_parent(bounds.stop) if bounds.stop is not None else None
+        )
+        parent_seed = (
+            self.local_to_parent(bounds.seed) if bounds.seed is not None else None
+        )
+        parent_bounds = SubvolumeBounds(
+            start=parent_start,
+            stop=parent_stop,
+            seed=parent_seed,
+            label_id=bounds.label_id,
+            label_margin=bounds.label_margin,
+        )
         return self.parent.get_subvolume(parent_bounds)
 
 
@@ -879,18 +1020,24 @@ class PartitionedVolume(VolumeView):
     partition_index : iterable of int
         Index of the partition which this volume will represent.
     """
+
     def __init__(self, parent, partitioning, partition_index):
         super(PartitionedVolume, self).__init__(
-                parent,
-                parent.resolution,
-                image_data=parent.image_data,
-                label_data=parent.label_data,
-                mask_data=parent.mask_data)
+            parent,
+            parent.resolution,
+            image_data=parent.image_data,
+            label_data=parent.label_data,
+            mask_data=parent.mask_data,
+        )
         self.partitioning = np.asarray(partitioning)
         self.partition_index = np.asarray(partition_index)
-        partition_shape = np.floor_divide(np.array(self.parent.shape), self.partitioning)
-        self.bounds = ((np.multiply(partition_shape, self.partition_index)).astype(np.int64),
-                       (np.multiply(partition_shape, self.partition_index + 1)).astype(np.int64))
+        partition_shape = np.floor_divide(
+            np.array(self.parent.shape), self.partitioning
+        )
+        self.bounds = (
+            (np.multiply(partition_shape, self.partition_index)).astype(np.int64),
+            (np.multiply(partition_shape, self.partition_index + 1)).astype(np.int64),
+        )
 
     def local_to_parent(self, a):
         return a + self.bounds[0]
@@ -925,14 +1072,16 @@ class DownsampledVolume(VolumeView):
     downsample : iterable of int
         Integral zoom levels to downsample the wrapped volume.
     """
+
     def __init__(self, parent, downsample):
         self.scale = np.exp2(downsample).astype(np.int64)
         super(DownsampledVolume, self).__init__(
-                parent,
-                np.multiply(parent.resolution, self.scale),
-                image_data=parent.image_data,
-                label_data=parent.label_data,
-                mask_data=parent.mask_data)
+            parent,
+            np.multiply(parent.resolution, self.scale),
+            image_data=parent.image_data,
+            label_data=parent.label_data,
+            mask_data=parent.mask_data,
+        )
 
     def local_to_parent(self, a):
         return np.multiply(a, self.scale)
@@ -947,14 +1096,27 @@ class DownsampledVolume(VolumeView):
     def get_subvolume(self, bounds):
         subvol_shape = bounds.stop - bounds.start
         label_shape = subvol_shape - 2 * bounds.label_margin
-        parent_bounds = SubvolumeBounds(self.local_to_parent(bounds.start),
-                                        self.local_to_parent(bounds.stop),
-                                        label_margin=self.local_to_parent(bounds.label_margin))
+        parent_bounds = SubvolumeBounds(
+            self.local_to_parent(bounds.start),
+            self.local_to_parent(bounds.stop),
+            label_margin=self.local_to_parent(bounds.label_margin),
+        )
         subvol = self.parent.get_subvolume(parent_bounds)
-        subvol.image = subvol.image.reshape(
-                [subvol_shape[0], self.scale[0],
-                 subvol_shape[1], self.scale[1],
-                 subvol_shape[2], self.scale[2]]).mean(5).mean(3).mean(1)
+        subvol.image = (
+            subvol.image.reshape(
+                [
+                    subvol_shape[0],
+                    self.scale[0],
+                    subvol_shape[1],
+                    self.scale[1],
+                    subvol_shape[2],
+                    self.scale[2],
+                ]
+            )
+            .mean(5)
+            .mean(3)
+            .mean(1)
+        )
 
         if subvol.label_mask is not None:
             # Downsample body mask by considering blocks where the majority
@@ -962,16 +1124,39 @@ class DownsampledVolume(VolumeView):
             # - Conjunction (tends to introduce false splits)
             # - Disjunction (tends to overdilate and merge)
             # - Mode label (computationally expensive)
-            if CONFIG.volume.label_downsampling == 'conjunction':
-                subvol.label_mask = subvol.label_mask.reshape(
-                        [label_shape[0], self.scale[0],
-                         label_shape[1], self.scale[1],
-                         label_shape[2], self.scale[2]]).all(5).all(3).all(1)
+            if CONFIG.volume.label_downsampling == "conjunction":
+                subvol.label_mask = (
+                    subvol.label_mask.reshape(
+                        [
+                            label_shape[0],
+                            self.scale[0],
+                            label_shape[1],
+                            self.scale[1],
+                            label_shape[2],
+                            self.scale[2],
+                        ]
+                    )
+                    .all(5)
+                    .all(3)
+                    .all(1)
+                )
             else:
-                subvol.label_mask = subvol.label_mask.reshape(
-                        [label_shape[0], self.scale[0],
-                         label_shape[1], self.scale[1],
-                         label_shape[2], self.scale[2]]).mean(5).mean(3).mean(1) > 0.5
+                subvol.label_mask = (
+                    subvol.label_mask.reshape(
+                        [
+                            label_shape[0],
+                            self.scale[0],
+                            label_shape[1],
+                            self.scale[1],
+                            label_shape[2],
+                            self.scale[2],
+                        ]
+                    )
+                    .mean(5)
+                    .mean(3)
+                    .mean(1)
+                    > 0.5
+                )
 
         # Note that this is not a coordinate xform to parent in the typical
         # sense, just a rescaling of the coordinate in the subvolume-local
@@ -983,38 +1168,43 @@ class DownsampledVolume(VolumeView):
 
 class SparseWrappedVolume(VolumeView):
     """Wrap a existing volume for memory cached block sparse access."""
+
     def __init__(self, parent, image_leaf_shape=None, label_leaf_shape=None):
         if image_leaf_shape is None:
             image_leaf_shape = list(CONFIG.model.input_fov_shape)
         if label_leaf_shape is None:
             label_leaf_shape = list(CONFIG.model.input_fov_shape)
 
-        image_data = OctreeVolume(image_leaf_shape,
-                                  (np.zeros(3), parent.image_data.shape),
-                                  parent.image_data.dtype,
-                                  populator=self.image_populator)
-        label_data = OctreeVolume(label_leaf_shape,
-                                  (np.zeros(3), parent.label_data.shape),
-                                  parent.label_data.dtype,
-                                  populator=self.label_populator)
+        image_data = OctreeVolume(
+            image_leaf_shape,
+            (np.zeros(3), parent.image_data.shape),
+            parent.image_data.dtype,
+            populator=self.image_populator,
+        )
+        label_data = OctreeVolume(
+            label_leaf_shape,
+            (np.zeros(3), parent.label_data.shape),
+            parent.label_data.dtype,
+            populator=self.label_populator,
+        )
 
         super(SparseWrappedVolume, self).__init__(
-                parent,
-                parent.resolution,
-                image_data=image_data,
-                label_data=label_data)
+            parent, parent.resolution, image_data=image_data, label_data=label_data
+        )
 
     def image_populator(self, bounds):
         return self.parent.image_data[
-                bounds[0][0]:bounds[1][0],
-                bounds[0][1]:bounds[1][1],
-                bounds[0][2]:bounds[1][2]]
+            bounds[0][0] : bounds[1][0],
+            bounds[0][1] : bounds[1][1],
+            bounds[0][2] : bounds[1][2],
+        ]
 
     def label_populator(self, bounds):
         return self.parent.label_data[
-                bounds[0][0]:bounds[1][0],
-                bounds[0][1]:bounds[1][1],
-                bounds[0][2]:bounds[1][2]]
+            bounds[0][0] : bounds[1][0],
+            bounds[0][1] : bounds[1][1],
+            bounds[0][2] : bounds[1][2],
+        ]
 
 
 class HDF5Volume(Volume):
@@ -1029,80 +1219,107 @@ class HDF5Volume(Volume):
     label_dataset : str
         Full dataset path including groups to the object label data array.
     """
+
     @staticmethod
     def from_toml(filename):
         from keras.utils.data_utils import get_file
 
         volumes = {}
-        with open(filename, 'rb') as fin:
-            datasets = toml.load(fin).get('dataset', [])
+        with open(filename, "rb") as fin:
+            datasets = toml.load(fin).get("dataset", [])
             for dataset in datasets:
-                hdf5_file = dataset['hdf5_file']
-                if dataset.get('use_keras_cache', False):
-                    hdf5_file = get_file(hdf5_file, dataset['download_url'], md5_hash=dataset.get('download_md5', None))
-                image_dataset = dataset.get('image_dataset', None)
-                label_dataset = dataset.get('label_dataset', None)
-                mask_dataset = dataset.get('mask_dataset', None)
-                mask_bounds = dataset.get('mask_bounds', None)
-                resolution = dataset.get('resolution', None)
+                hdf5_file = dataset["hdf5_file"]
+                if dataset.get("use_keras_cache", False):
+                    hdf5_file = get_file(
+                        hdf5_file,
+                        dataset["download_url"],
+                        md5_hash=dataset.get("download_md5", None),
+                    )
+                image_dataset = dataset.get("image_dataset", None)
+                label_dataset = dataset.get("label_dataset", None)
+                mask_dataset = dataset.get("mask_dataset", None)
+                mask_bounds = dataset.get("mask_bounds", None)
+                resolution = dataset.get("resolution", None)
                 hdf5_pathed_file = os.path.join(os.path.dirname(filename), hdf5_file)
-                volume = HDF5Volume(hdf5_pathed_file,
-                                    image_dataset,
-                                    label_dataset,
-                                    mask_dataset,
-                                    mask_bounds=mask_bounds)
+                volume = HDF5Volume(
+                    hdf5_pathed_file,
+                    image_dataset,
+                    label_dataset,
+                    mask_dataset,
+                    mask_bounds=mask_bounds,
+                )
                 # If the volume configuration specifies an explicit resolution,
                 # override any provided in the HDF5 itself.
                 if resolution:
-                    logging.info('Overriding resolution for volume "%s"', dataset['name'])
+                    logging.info(
+                        'Overriding resolution for volume "%s"', dataset["name"]
+                    )
                     volume.resolution = np.array(resolution)
-                volumes[dataset['name']] = volume
+                volumes[dataset["name"]] = volume
 
         return volumes
 
     @staticmethod
     def write_file(filename, resolution, **kwargs):
-        h5file = h5py.File(filename, 'w')
-        config = {'hdf5_file': os.path.basename(filename)}
-        channels = ['image', 'label', 'mask']
+        h5file = h5py.File(filename, "w")
+        config = {"hdf5_file": os.path.basename(filename)}
+        channels = ["image", "label", "mask"]
         default_datasets = {
-            'image': 'volumes/raw',
-            'label': 'volumes/labels/neuron_ids',
-            'mask': 'volumes/labels/mask',
+            "image": "volumes/raw",
+            "label": "volumes/labels/neuron_ids",
+            "mask": "volumes/labels/mask",
         }
         for channel in channels:
-            data = kwargs.get('{}_data'.format(channel), None)
-            dataset_name = kwargs.get('{}_dataset'.format(channel), default_datasets[channel])
+            data = kwargs.get("{}_data".format(channel), None)
+            dataset_name = kwargs.get(
+                "{}_dataset".format(channel), default_datasets[channel]
+            )
             if data is not None:
-                dataset = h5file.create_dataset(dataset_name, data=data, dtype=data.dtype)
-                dataset.attrs['resolution'] = resolution
-                config['{}_dataset'.format(channel)] = dataset_name
+                dataset = h5file.create_dataset(
+                    dataset_name, data=data, dtype=data.dtype
+                )
+                dataset.attrs["resolution"] = resolution
+                config["{}_dataset".format(channel)] = dataset_name
 
         h5file.close()
 
         return config
 
-    def __init__(self, orig_file, image_dataset, label_dataset, mask_dataset, mask_bounds=None):
+    def __init__(
+        self, orig_file, image_dataset, label_dataset, mask_dataset, mask_bounds=None
+    ):
         logging.debug('Loading HDF5 file "{}"'.format(orig_file))
-        self.file = h5py.File(orig_file, 'r')
+        self.file = h5py.File(orig_file, "r")
         self.resolution = None
-        self._mask_bounds = tuple(map(np.asarray, mask_bounds)) if mask_bounds is not None else None
+        self._mask_bounds = (
+            tuple(map(np.asarray, mask_bounds)) if mask_bounds is not None else None
+        )
 
         if image_dataset is None and label_dataset is None:
-            raise ValueError('HDF5 volume must have either an image or label dataset: {}'.format(orig_file))
+            raise ValueError(
+                "HDF5 volume must have either an image or label dataset: {}".format(
+                    orig_file
+                )
+            )
 
         if image_dataset is not None:
             self.image_data = self.file[image_dataset]
-            if 'resolution' in self.file[image_dataset].attrs:
-                self.resolution = np.array(self.file[image_dataset].attrs['resolution'])
+            if "resolution" in self.file[image_dataset].attrs:
+                self.resolution = np.array(self.file[image_dataset].attrs["resolution"])
 
         if label_dataset is not None:
             self.label_data = self.file[label_dataset]
-            if 'resolution' in self.file[label_dataset].attrs:
-                resolution = np.array(self.file[label_dataset].attrs['resolution'])
-                if self.resolution is not None and not np.array_equal(self.resolution, resolution):
-                    logging.warning('HDF5 image and label dataset resolutions differ in %s: %s, %s',
-                                    orig_file, self.resolution, resolution)
+            if "resolution" in self.file[label_dataset].attrs:
+                resolution = np.array(self.file[label_dataset].attrs["resolution"])
+                if self.resolution is not None and not np.array_equal(
+                    self.resolution, resolution
+                ):
+                    logging.warning(
+                        "HDF5 image and label dataset resolutions differ in %s: %s, %s",
+                        orig_file,
+                        self.resolution,
+                        resolution,
+                    )
                 else:
                     self.resolution = resolution
         else:
@@ -1120,10 +1337,12 @@ class HDF5Volume(Volume):
             self.resolution = np.ones(3)
 
     def to_memory_volume(self):
-        data = ['image_data', 'label_data', 'mask_data']
+        data = ["image_data", "label_data", "mask_data"]
         data = {
-                k: self.world_mat_to_local(getattr(self, k)[:])
-                for k in data if getattr(self, k) is not None}
+            k: self.world_mat_to_local(getattr(self, k)[:])
+            for k in data
+            if getattr(self, k) is not None
+        }
         return NdarrayVolume(self.world_coord_to_local(self.resolution), **data)
 
 
@@ -1149,24 +1368,32 @@ class ImageStackVolume(Volume):
     label_leaf_shape : tuple of int or ndarray, optional
         Shape of label octree leaves in voxels. Defaults to FFN model FOV.
     """
+
     @staticmethod
     def from_catmaid_stack(stack_info, tile_source_parameters):
         # See https://catmaid.readthedocs.io/en/stable/tile_sources.html
         format_url = {
-            1: '{source_base_url}{{z}}/{{row}}_{{col}}_{{zoom_level}}.{file_extension}',
-            4: '{source_base_url}{{z}}/{{zoom_level}}/{{row}}_{{col}}.{file_extension}',
-            5: '{source_base_url}{{zoom_level}}/{{z}}/{{row}}/{{col}}.{file_extension}',
-            7: '{source_base_url}largeDataTileSource/{tile_width}/{tile_height}/'
-               '{{zoom_level}}/{{z}}/{{row}}/{{col}}.{file_extension}',
-            9: '{source_base_url}{{z}}/{{row}}_{{col}}_{{zoom_level}}.{file_extension}',
-        }[tile_source_parameters['tile_source_type']].format(**tile_source_parameters)
-        bounds = np.flipud(np.array(stack_info['bounds'], dtype=np.int64))
-        resolution = np.flipud(np.array(stack_info['resolution']))
-        translation = np.flipud(np.array(stack_info['translation']))
-        tile_width = int(tile_source_parameters['tile_width'])
-        tile_height = int(tile_source_parameters['tile_height'])
-        return ImageStackVolume(bounds, resolution, translation, tile_width, tile_height,
-                                format_url, missing_z=stack_info.get("broken_slices", None))
+            1: "{source_base_url}{{z}}/{{row}}_{{col}}_{{zoom_level}}.{file_extension}",
+            4: "{source_base_url}{{z}}/{{zoom_level}}/{{row}}_{{col}}.{file_extension}",
+            5: "{source_base_url}{{zoom_level}}/{{z}}/{{row}}/{{col}}.{file_extension}",
+            7: "{source_base_url}largeDataTileSource/{tile_width}/{tile_height}/"
+            "{{zoom_level}}/{{z}}/{{row}}/{{col}}.{file_extension}",
+            9: "{source_base_url}{{z}}/{{row}}_{{col}}_{{zoom_level}}.{file_extension}",
+        }[tile_source_parameters["tile_source_type"]].format(**tile_source_parameters)
+        bounds = np.flipud(np.array(stack_info["bounds"], dtype=np.int64))
+        resolution = np.flipud(np.array(stack_info["resolution"]))
+        translation = np.flipud(np.array(stack_info["translation"]))
+        tile_width = int(tile_source_parameters["tile_width"])
+        tile_height = int(tile_source_parameters["tile_height"])
+        return ImageStackVolume(
+            bounds,
+            resolution,
+            translation,
+            tile_width,
+            tile_height,
+            format_url,
+            missing_z=stack_info.get("broken_slices", None),
+        )
 
     def from_toml(filename):
         volumes = {}
@@ -1198,8 +1425,18 @@ class ImageStackVolume(Volume):
 
         return volumes
 
-    def __init__(self, bounds, orig_resolution, translation, tile_width, tile_height, 
-                 tile_format_url, zoom_level=0, missing_z=None, image_leaf_shape=None):
+    def __init__(
+        self,
+        bounds,
+        orig_resolution,
+        translation,
+        tile_width,
+        tile_height,
+        tile_format_url,
+        zoom_level=0,
+        missing_z=None,
+        image_leaf_shape=None,
+    ):
         self.orig_bounds = bounds
         self.orig_resolution = orig_resolution
         self.tile_width = tile_width
@@ -1214,13 +1451,14 @@ class ImageStackVolume(Volume):
         if image_leaf_shape is None:
             image_leaf_shape = [10, tile_height, tile_width]
 
-        self.scale = np.exp2(np.array([0, self.zoom_level, self.zoom_level])).astype(np.int64)
+        self.scale = np.exp2(np.array([0, self.zoom_level, self.zoom_level])).astype(
+            np.int64
+        )
 
         data_shape = (np.zeros(3), np.divide(bounds, self.scale).astype(np.int64))
-        self.image_data = OctreeVolume(image_leaf_shape,
-                                       data_shape,
-                                       'float32',
-                                       populator=self.image_populator)
+        self.image_data = OctreeVolume(
+            image_leaf_shape, data_shape, "float32", populator=self.image_populator
+        )
 
         self.label_data = None
 
@@ -1249,15 +1487,16 @@ class ImageStackVolume(Volume):
         zoom_level = np.min(downsample[[self.DIM.X, self.DIM.Y]])
         if zoom_level > 0:
             return ImageStackVolume(
-                    self.orig_bounds,
-                    self.orig_resolution,
-                    self.translation,
-                    self.tile_width,
-                    self.tile_height,
-                    self.tile_format_url,
-                    zoom_level=self.zoom_level + zoom_level,
-                    missing_z=self.missing_z,
-                    image_leaf_shape=self.image_data.leaf_shape).downsample(resolution)
+                self.orig_bounds,
+                self.orig_resolution,
+                self.translation,
+                self.tile_width,
+                self.tile_height,
+                self.tile_format_url,
+                zoom_level=self.zoom_level + zoom_level,
+                missing_z=self.missing_z,
+                image_leaf_shape=self.image_data.leaf_shape,
+            ).downsample(resolution)
         if np.all(np.equal(downsample, 0)):
             return self
         return DownsampledVolume(self, downsample)
@@ -1265,7 +1504,9 @@ class ImageStackVolume(Volume):
     def subvolume_bounds_generator(self, sparse_margin=None, **kwargs):
         if sparse_margin is not None:
             if kwargs:
-                raise ValueError('sparse_margin can not be combined with other arguments.')
+                raise ValueError(
+                    "sparse_margin can not be combined with other arguments."
+                )
             return self.SparseSubvolumeBoundsGenerator(self, sparse_margin)
         return super(ImageStackVolume, self).subvolume_bounds_generator(**kwargs)
 
@@ -1275,13 +1516,16 @@ class ImageStackVolume(Volume):
             label_subvol = self.label_data
         else:
             image_subvol = self.image_data[
-                    bounds.start[0]:bounds.stop[0],
-                    bounds.start[1]:bounds.stop[1],
-                    bounds.start[2]:bounds.stop[2]]
+                bounds.start[0] : bounds.stop[0],
+                bounds.start[1] : bounds.stop[1],
+                bounds.start[2] : bounds.stop[2],
+            ]
             label_subvol = None
 
         if np.issubdtype(image_subvol.dtype, np.integer):
-            raise ValueError('Sparse volume access does not support image data coercion.')
+            raise ValueError(
+                "Sparse volume access does not support image data coercion."
+            )
 
         seed = bounds.seed
         if seed is None:
@@ -1291,10 +1535,24 @@ class ImageStackVolume(Volume):
 
     def image_populator(self, bounds):
         image_subvol = np.zeros(tuple(bounds[1] - bounds[0]), dtype=np.float32)
-        col_range = list(map(int, (math.floor(bounds[0][self.DIM.X] / self.tile_width),
-                                   math.ceil(bounds[1][self.DIM.X] / self.tile_width))))
-        row_range = list(map(int, (math.floor(bounds[0][self.DIM.Y] / self.tile_height),
-                                   math.ceil(bounds[1][self.DIM.Y] / self.tile_height))))
+        col_range = list(
+            map(
+                int,
+                (
+                    math.floor(bounds[0][self.DIM.X] / self.tile_width),
+                    math.ceil(bounds[1][self.DIM.X] / self.tile_width),
+                ),
+            )
+        )
+        row_range = list(
+            map(
+                int,
+                (
+                    math.floor(bounds[0][self.DIM.Y] / self.tile_height),
+                    math.ceil(bounds[1][self.DIM.Y] / self.tile_height),
+                ),
+            )
+        )
         tile_size = np.array([1, self.tile_height, self.tile_width]).astype(np.int64)
         for z in xrange(bounds[0][self.DIM.Z], bounds[1][self.DIM.Z]):
             if z in self.missing_z:
@@ -1302,7 +1560,9 @@ class ImageStackVolume(Volume):
                 continue
             for r in xrange(*row_range):
                 for c in xrange(*col_range):
-                    url = self.tile_format_url.format(zoom_level=self.zoom_level, z=z, row=r, col=c)
+                    url = self.tile_format_url.format(
+                        zoom_level=self.zoom_level, z=z, row=r, col=c
+                    )
                     try:
                         im = np.array(Image.open(requests.get(url, stream=True).raw))
                         # If the image is multichannel, throw our hands up and
@@ -1311,22 +1571,33 @@ class ImageStackVolume(Volume):
                             im = im[:, :, 0].squeeze()
                         im = im / 256.0
                     except IOError:
-                        logging.debug('Failed to load tile: %s', url)
-                        im = np.full((self.tile_height, self.tile_width), 0, dtype=np.float32)
+                        logging.debug("Failed to load tile: %s", url)
+                        im = np.full(
+                            (self.tile_height, self.tile_width), 0, dtype=np.float32
+                        )
                     tile_coord = np.array([z, r, c]).astype(np.int64)
                     tile_loc = np.multiply(tile_coord, tile_size)
 
-                    subvol = (np.maximum(np.zeros(3), tile_loc - bounds[0]).astype(np.int64),
-                              np.minimum(np.array(image_subvol.shape),
-                                         tile_loc + tile_size - bounds[0]).astype(np.int64))
-                    tile_sub = (np.maximum(np.zeros(3), bounds[0] - tile_loc).astype(np.int64),
-                                np.minimum(tile_size, bounds[1] - tile_loc).astype(np.int64))
+                    subvol = (
+                        np.maximum(np.zeros(3), tile_loc - bounds[0]).astype(np.int64),
+                        np.minimum(
+                            np.array(image_subvol.shape),
+                            tile_loc + tile_size - bounds[0],
+                        ).astype(np.int64),
+                    )
+                    tile_sub = (
+                        np.maximum(np.zeros(3), bounds[0] - tile_loc).astype(np.int64),
+                        np.minimum(tile_size, bounds[1] - tile_loc).astype(np.int64),
+                    )
 
-                    image_subvol[subvol[0][self.DIM.Z],
-                                 subvol[0][self.DIM.Y]:subvol[1][self.DIM.Y],
-                                 subvol[0][self.DIM.X]:subvol[1][self.DIM.X]] = \
-                        im[tile_sub[0][self.DIM.Y]:tile_sub[1][self.DIM.Y],
-                           tile_sub[0][self.DIM.X]:tile_sub[1][self.DIM.X]]
+                    image_subvol[
+                        subvol[0][self.DIM.Z],
+                        subvol[0][self.DIM.Y] : subvol[1][self.DIM.Y],
+                        subvol[0][self.DIM.X] : subvol[1][self.DIM.X],
+                    ] = im[
+                        tile_sub[0][self.DIM.Y] : tile_sub[1][self.DIM.Y],
+                        tile_sub[0][self.DIM.X] : tile_sub[1][self.DIM.X],
+                    ]
 
         return image_subvol
 
@@ -1335,7 +1606,9 @@ class ImageStackVolume(Volume):
             self.volume = volume
             self.margin = np.asarray(margin).astype(np.int64)
             self.ctr_min = self.margin
-            self.ctr_max = (np.array(self.volume.shape) - self.margin - 1).astype(np.int64)
+            self.ctr_max = (np.array(self.volume.shape) - self.margin - 1).astype(
+                np.int64
+            )
             self.random = np.random.RandomState(CONFIG.random_seed)
 
         @property
@@ -1349,6 +1622,10 @@ class ImageStackVolume(Volume):
             self.random.seed(0)
 
         def __next__(self):
-            ctr = np.array([self.random.randint(self.ctr_min[n], self.ctr_max[n])
-                            for n in range(3)]).astype(np.int64)
+            ctr = np.array(
+                [
+                    self.random.randint(self.ctr_min[n], self.ctr_max[n])
+                    for n in range(3)
+                ]
+            ).astype(np.int64)
             return SubvolumeBounds(seed=ctr)

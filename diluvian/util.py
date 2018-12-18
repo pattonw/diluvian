@@ -26,13 +26,15 @@ class WrappedViewer(neuroglancer.Viewer):
     def get_json_state(self):
         state = super(WrappedViewer, self).get_json_state()
         if self.voxel_coordinates is not None:
-            if 'navigation' not in state:
-                state['navigation'] = collections.OrderedDict()
-            if 'pose' not in state['navigation']:
-                state['navigation']['pose'] = collections.OrderedDict()
-            if 'position' not in state['navigation']['pose']:
-                state['navigation']['pose']['position'] = collections.OrderedDict()
-            state['navigation']['pose']['position']['voxelCoordinates'] = list(map(int, list(self.voxel_coordinates)))
+            if "navigation" not in state:
+                state["navigation"] = collections.OrderedDict()
+            if "pose" not in state["navigation"]:
+                state["navigation"]["pose"] = collections.OrderedDict()
+            if "position" not in state["navigation"]["pose"]:
+                state["navigation"]["pose"]["position"] = collections.OrderedDict()
+            state["navigation"]["pose"]["position"]["voxelCoordinates"] = list(
+                map(int, list(self.voxel_coordinates))
+            )
         return state
 
     def open_in_browser(self):
@@ -42,8 +44,8 @@ class WrappedViewer(neuroglancer.Viewer):
         print(self)
 
         while True:
-            s = raw_input('Press v, enter to open in browser, or enter to close...')
-            if s == 'v':
+            s = raw_input("Press v, enter to open in browser, or enter to close...")
+            if s == "v":
                 self.open_in_browser()
             else:
                 break
@@ -66,15 +68,15 @@ def write_keras_history_to_csv(history, filename):
     filename : str
     """
     if sys.version_info[0] < 3:
-        args, kwargs = (['wb', ], {})
+        args, kwargs = (["wb"], {})
     else:
-        args, kwargs = (['w', ], {'newline': '', 'encoding': 'utf8', })
+        args, kwargs = (["w"], {"newline": "", "encoding": "utf8"})
     with open(filename, *args, **kwargs) as csvfile:
         writer = csv.writer(csvfile)
         metric_cols = history.history.keys()
         indices = [i[0] for i in sorted(enumerate(metric_cols), key=lambda x: x[1])]
         metric_cols = sorted(metric_cols)
-        cols = ['epoch'] + metric_cols
+        cols = ["epoch"] + metric_cols
         sorted_metrics = list(history.history.values())
         sorted_metrics = [sorted_metrics[i] for i in indices]
         writer.writerow(cols)
@@ -83,7 +85,7 @@ def write_keras_history_to_csv(history, filename):
 
 
 def get_function(name):
-    mod_name, func_name = name.rsplit('.', 1)
+    mod_name, func_name = name.rsplit(".", 1)
     mod = importlib.import_module(mod_name)
     func = getattr(mod, func_name)
 
@@ -91,15 +93,17 @@ def get_function(name):
 
 
 def get_color_shader(channel, normalized=True):
-    xform = 'toNormalized' if normalized else 'toRaw'
-    value_str = '{}(getDataValue(0))'.format(xform)
-    channels = ['0', '0', '0', value_str]
-    channels[channel] = '1'
+    xform = "toNormalized" if normalized else "toRaw"
+    value_str = "{}(getDataValue(0))".format(xform)
+    channels = ["0", "0", "0", value_str]
+    channels[channel] = "1"
     shader = """
 void main() {{
   emitRGBA(vec4({}));
 }}
-""".format(', '.join(channels))
+""".format(
+        ", ".join(channels)
+    )
     return shader
 
 
@@ -156,11 +160,15 @@ def binary_crossentropy(y, y_pred, eps=1e-15):
     y_pred = np.clip(y_pred, eps, 1 - eps)
 
     loss = y * np.log(y_pred) + (1.0 - y) * np.log(1.0 - y_pred)
-    return - np.sum(loss) / np.prod(y.shape)
+    return -np.sum(loss) / np.prod(y.shape)
 
 
 def confusion_f_score(cm, beta):
-    return (1.0 + beta) * cm[1, 1] / ((1.0 + beta) * cm[1, 1] + (beta ** 2) * cm[1, 0] + cm[0, 1])
+    return (
+        (1.0 + beta)
+        * cm[1, 1]
+        / ((1.0 + beta) * cm[1, 1] + (beta ** 2) * cm[1, 0] + cm[0, 1])
+    )
 
 
 class Roundrobin(six.Iterator):
@@ -180,13 +188,13 @@ class Roundrobin(six.Iterator):
         self.iterables = iterables
         self.pending = len(self.iterables)
         self.nexts = itertools.cycle(self.iterables)
-        self.name = kwargs.get('name', 'Unknown')
+        self.name = kwargs.get("name", "Unknown")
 
     def __iter__(self):
         return self
 
     def reset(self):
-        logging.debug('Resetting generator: %s', self.name)
+        logging.debug("Resetting generator: %s", self.name)
         for it in self.iterables:
             iter(it).reset()
         self.pending = len(self.iterables)

@@ -34,8 +34,11 @@ class Body(object):
             bounds[0] += mask_min
             bounds[1] -= np.array(mask.shape) - mask_max
             mask = mask[list(map(slice, mask_min, mask_max))]
-            assert mask.shape == tuple(bounds[1] - bounds[0]), \
-                'Bounds shape ({}) and mask shape ({}) differ.'.format(bounds[1] - bounds[0], mask.shape)
+            assert mask.shape == tuple(
+                bounds[1] - bounds[0]
+            ), "Bounds shape ({}) and mask shape ({}) differ.".format(
+                bounds[1] - bounds[0], mask.shape
+            )
         else:
             bounds = (np.zeros(3, dtype=np.int64), np.array(self.mask.shape))
             mask = self.mask
@@ -43,7 +46,9 @@ class Body(object):
         if closing_shape is not None:
             # Use grey closing rather than binary closing because it uses
             # a mode at the boundary that prevents erosion.
-            mask = ndimage.grey_closing(mask, structure=np.ones(closing_shape), mode='nearest')
+            mask = ndimage.grey_closing(
+                mask, structure=np.ones(closing_shape), mode="nearest"
+            )
 
         return mask, bounds
 
@@ -56,7 +61,11 @@ class Body(object):
         label_im = np.minimum(label_im, 1)
 
         if label_im[tuple(self.seed - bounds[0])] == 0:
-            logging.warning('Seed voxel ({}) is not in connected component.'.format(np.array_str(self.seed)))
+            logging.warning(
+                "Seed voxel ({}) is not in connected component.".format(
+                    np.array_str(self.seed)
+                )
+            )
 
         return label_im, bounds
 
@@ -66,19 +75,27 @@ class Body(object):
         label_im, _ = ndimage.label(mask)
         seed_label = label_im[tuple(self.seed - bounds[0])]
         if seed_label == 0:
-            raise ValueError('Seed voxel ({}) is not in body.'.format(np.array_str(self.seed)))
+            raise ValueError(
+                "Seed voxel ({}) is not in body.".format(np.array_str(self.seed))
+            )
         label_im[label_im != seed_label] = 0
         label_im[label_im == seed_label] = 1
 
         return label_im, bounds
 
     def to_swc(self, filename):
-        component, bounds = self.get_largest_component(closing_shape=CONFIG.postprocessing.closing_shape)
-        print('Skeleton is within {}, {}'.format(np.array_str(bounds[0]), np.array_str(bounds[1])))
+        component, bounds = self.get_largest_component(
+            closing_shape=CONFIG.postprocessing.closing_shape
+        )
+        print(
+            "Skeleton is within {}, {}".format(
+                np.array_str(bounds[0]), np.array_str(bounds[1])
+            )
+        )
         skel = skeletonize_component(component)
         swc = skeleton_to_swc(skel, bounds[0], CONFIG.volume.resolution)
-        with open(filename, 'w') as swcfile:
-            writer = csv.writer(swcfile, delimiter=' ', quoting=csv.QUOTE_NONE)
+        with open(filename, "w") as swcfile:
+            writer = csv.writer(swcfile, delimiter=" ", quoting=csv.QUOTE_NONE)
             writer.writerows(swc)
 
 
@@ -90,7 +107,7 @@ def skeletonize_component(component):
     for i in range(3):
         res[i] = CONFIG.volume.resolution[i]
 
-    print('Skeletonizing...')
+    print("Skeletonizing...")
     skel = skeletopyze.get_skeleton_graph(component.astype(np.int32), params, res)
 
     return skel
@@ -116,21 +133,23 @@ def skeleton_to_swc(skeleton, offset, resolution):
         # skeletopyze is z, y, x (as it should be).
         loc = np.array(loc)
         loc = np.multiply(loc + offset, resolution)
-        t.node[n].update({'x': loc[0],
-                          'y': loc[1],
-                          'z': loc[2],
-                          'radius': skeleton.diameters(n) / 2.0})
+        t.node[n].update(
+            {
+                "x": loc[0],
+                "y": loc[1],
+                "z": loc[2],
+                "radius": skeleton.diameters(n) / 2.0,
+            }
+        )
 
     # Set parent node ID
     for n, nbrs in t.adjacency_iter():
         for nbr in nbrs:
-            t.node[nbr]['parent_id'] = n
-            if 'radius' not in t.node[nbr]:
-                t.node[nbr]['radius'] = -1
+            t.node[nbr]["parent_id"] = n
+            if "radius" not in t.node[nbr]:
+                t.node[nbr]["radius"] = -1
 
-    return [[
-        node_id,
-        0,
-        n['x'], n['y'], n['z'],
-        n['radius'],
-        n.get('parent_id', -1)] for node_id, n in t.nodes(data=True)]
+    return [
+        [node_id, 0, n["x"], n["y"], n["z"], n["radius"], n.get("parent_id", -1)]
+        for node_id, n in t.nodes(data=True)
+    ]

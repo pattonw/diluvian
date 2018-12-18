@@ -11,10 +11,7 @@ from scipy import ndimage
 from six.moves import range as xrange
 
 from .config import CONFIG
-from .util import (
-        get_color_shader,
-        WrappedViewer,
-)
+from .util import get_color_shader, WrappedViewer
 
 
 def make_prewitt(size):
@@ -27,7 +24,8 @@ def make_prewitt(size):
     size : int
         1-D size of the filter (should be odd).
     """
-    def prewitt(input, axis=-1, output=None, mode='reflect', cval=0.0):
+
+    def prewitt(input, axis=-1, output=None, mode="reflect", cval=0.0):
         input = np.asarray(input)
         if axis < 0:
             axis += input.ndim
@@ -49,7 +47,9 @@ def make_prewitt(size):
     return prewitt
 
 
-def intensity_distance_seeds(image_data, resolution, axis=0, erosion_radius=16, min_sep=24, visualize=False):
+def intensity_distance_seeds(
+    image_data, resolution, axis=0, erosion_radius=16, min_sep=24, visualize=False
+):
     """Create seed locations maximally distant from a Sobel filter.
 
     Parameters
@@ -75,8 +75,10 @@ def intensity_distance_seeds(image_data, resolution, axis=0, erosion_radius=16, 
     structure = np.ones(np.floor_divide(erosion_radius, resolution) * 2 + 1)
 
     if axis is None:
+
         def slices():
             yield [slice(None), slice(None), slice(None)]
+
     else:
         structure = structure[axis]
 
@@ -93,12 +95,14 @@ def intensity_distance_seeds(image_data, resolution, axis=0, erosion_radius=16, 
     for s in slices():
         image_slice = image_data[s]
         if axis is not None and not np.any(image_slice):
-            logging.debug('Skipping blank slice.')
+            logging.debug("Skipping blank slice.")
             continue
-        logging.debug('Running Sobel filter on image shape %s', image_data.shape)
-        sobel[s] = ndimage.generic_gradient_magnitude(image_slice, make_prewitt(int((24 / resolution).max() * 2 + 1)))
+        logging.debug("Running Sobel filter on image shape %s", image_data.shape)
+        sobel[s] = ndimage.generic_gradient_magnitude(
+            image_slice, make_prewitt(int((24 / resolution).max() * 2 + 1))
+        )
         # sobel = ndimage.grey_dilation(sobel, size=(5,5,3))
-        logging.debug('Running distance transform on image shape %s', image_data.shape)
+        logging.debug("Running distance transform on image shape %s", image_data.shape)
 
         # For low res images the sobel histogram is unimodal. For now just
         # threshold the histogram at the mean.
@@ -107,16 +111,16 @@ def intensity_distance_seeds(image_data, resolution, axis=0, erosion_radius=16, 
         transform[s] = ndimage.distance_transform_cdt(thresh[s])
         # Remove missing sections from distance transform.
         transform[s][image_slice == 0] = 0
-        logging.debug('Finding local maxima of image shape %s', image_data.shape)
+        logging.debug("Finding local maxima of image shape %s", image_data.shape)
         skmax[s] = morphology.thin(morphology.extrema.local_maxima(transform[s]))
 
     if visualize:
         viewer = WrappedViewer()
-        viewer.add(image_data, name='Image')
-        viewer.add(sobel, name='Filtered')
-        viewer.add(thresh.astype(np.float), name='Thresholded')
-        viewer.add(transform.astype(np.float), name='Distance')
-        viewer.add(skmax, name='Seeds', shader=get_color_shader(0, normalized=False))
+        viewer.add(image_data, name="Image")
+        viewer.add(sobel, name="Filtered")
+        viewer.add(thresh.astype(np.float), name="Thresholded")
+        viewer.add(transform.astype(np.float), name="Distance")
+        viewer.add(skmax, name="Seeds", shader=get_color_shader(0, normalized=False))
         viewer.print_view_prompt()
 
     mask = np.zeros(np.floor_divide(min_sep, resolution) + 1)
@@ -155,7 +159,4 @@ def grid_seeds(image_data, _, grid_step_spacing=1):
 
 
 # Note that these must be added separately to the CLI.
-SEED_GENERATORS = {
-    'grid': grid_seeds,
-    'sobel': intensity_distance_seeds,
-}
+SEED_GENERATORS = {"grid": grid_seeds, "sobel": intensity_distance_seeds}
