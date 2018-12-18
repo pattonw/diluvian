@@ -1165,16 +1165,16 @@ class ImageStackVolume(Volume):
         tile_width = int(tile_source_parameters['tile_width'])
         tile_height = int(tile_source_parameters['tile_height'])
         return ImageStackVolume(bounds, resolution, tile_width, tile_height, format_url,
-                                missing_z=stack_info['broken_slices'])
+                                missing_z=stack_info.get("broken_slices", None))
 
-    def __init__(self, bounds, orig_resolution, translation, tile_width, tile_height, 
+    def __init__(self, bounds, orig_resolution, tile_width, tile_height, 
                  tile_format_url, zoom_level=0, missing_z=None, image_leaf_shape=None):
         self.orig_bounds = bounds
         self.orig_resolution = orig_resolution
-        self.translation = translation
         self.tile_width = tile_width
         self.tile_height = tile_height
         self.tile_format_url = tile_format_url
+        self.mask_data = None
 
         self.zoom_level = int(zoom_level)
         if missing_z is None:
@@ -1194,16 +1194,20 @@ class ImageStackVolume(Volume):
         self.label_data = None
 
     def local_coord_to_world(self, a):
-        return self.pixel_coord_to_real(np.matmul(a, self.scale))
+        # local refers to the downscaled coordinates (generally the fully downsampled model resolution)
+        # world refers to the upscaled coordinates (generally coordinates for data source i.e. origin at (0,0))
+        return np.multiply(a, self.scale)
 
     def world_coord_to_local(self, a):
-        return np.floor_divide(self.real_coord_to_pixel(a), self.scale)
+        # local refers to the downscaled coordinates (generally the fully downsampled model resolution)
+        # world refers to the upscaled coordinates (generally coordinates for data source i.e. origin at (0,0))
+        return np.floor_divide(a, self.scale)
 
     def real_coord_to_pixel(self, a):
         return np.floor_divide(a - self.translation, self.orig_resolution)
 
     def pixel_coord_to_real(self, a):
-        return np.matmul(a, self.orig_resolution) + self.translation
+        return np.multiply(a, self.orig_resolution) + self.translation
 
     @property
     def resolution(self):
@@ -1255,10 +1259,10 @@ class ImageStackVolume(Volume):
 
     def image_populator(self, bounds):
         image_subvol = np.zeros(tuple(bounds[1] - bounds[0]), dtype=np.float32)
-        col_range = map(int, (math.floor(bounds[0][self.DIM.X]/self.tile_width),
-                              math.ceil(bounds[1][self.DIM.X]/self.tile_width)))
-        row_range = map(int, (math.floor(bounds[0][self.DIM.Y]/self.tile_height),
-                              math.ceil(bounds[1][self.DIM.Y]/self.tile_height)))
+        col_range = list(map(int, (math.floor(bounds[0][self.DIM.X]/self.tile_width),
+                                   math.ceil(bounds[1][self.DIM.X]/self.tile_width))))
+        row_range = list(map(int, (math.floor(bounds[0][self.DIM.Y]/self.tile_height),
+                                   math.ceil(bounds[1][self.DIM.Y]/self.tile_height))))
         tile_size = np.array([1, self.tile_height, self.tile_width]).astype(np.int64)
         for z in xrange(bounds[0][self.DIM.Z], bounds[1][self.DIM.Z]):
             if z in self.missing_z:
