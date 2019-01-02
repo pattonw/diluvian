@@ -474,7 +474,7 @@ def fill_region_with_model(
                     )
                 )
             }
-            for k in volumes.iterkeys()
+            for k in volumes.keys()
         }
     else:
         if moves is None:
@@ -484,9 +484,9 @@ def fill_region_with_model(
         subv_shape = CONFIG.model.input_fov_shape + CONFIG.model.move_step * 2 * moves
 
         if sparse:
-            gen_kwargs = {k: {"sparse_margin": subv_shape} for k in volumes.iterkeys()}
+            gen_kwargs = {k: {"sparse_margin": subv_shape} for k in volumes.keys()}
         else:
-            gen_kwargs = {k: {"shape": subv_shape} for k in volumes.iterkeys()}
+            gen_kwargs = {k: {"shape": subv_shape} for k in volumes.keys()}
     subvolumes = [
         v.downsample(CONFIG.volume.resolution).subvolume_generator(**gen_kwargs[k])
         for k, v in six.iteritems(volumes)
