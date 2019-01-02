@@ -214,7 +214,7 @@ class SubvolumeGenerator(six.Iterator):
         self.bounds_generator.reset()
 
     def __next__(self):
-        return self.volume.get_subvolume(six.next(self.bounds_generator))
+        return self.volume.get_subvolume(next(self.bounds_generator))
 
 
 class ErodedMaskGenerator(six.Iterator):
@@ -1439,6 +1439,7 @@ class ImageStackVolume(Volume):
     ):
         self.orig_bounds = bounds
         self.orig_resolution = orig_resolution
+        self.translation = translation
         self.tile_width = tile_width
         self.tile_height = tile_height
         self.tile_format_url = tile_format_url
