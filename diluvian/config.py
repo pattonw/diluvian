@@ -441,6 +441,9 @@ class Config(object):
         self.postprocessing = PostprocessingConfig(settings.get("postprocessing", {}))
 
         self.random_seed = int(settings.get("random_seed", 0))
+        input_resolution = settings.get("input_resolution", None)
+        if input_resolution is not None:
+            self.volume.resolution = [float(x) for x in input_resolution]
 
     def __str__(self):
         sanitized = {}
