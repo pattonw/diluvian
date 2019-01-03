@@ -768,6 +768,8 @@ def fill_skeleton_with_model_threaded(
     skel = Skeleton()
     skel.input_nid_pid_x_y_z(nodes)
     region_shape = CONFIG.model.input_fov_shape
+    skel.fov_shape = region_shape
+    skel.resolution = CONFIG.volume.resolution
 
     pbar = tqdm(desc="Node queue", total=len(nodes), miniters=1, smoothing=0.0)
     num_nodes = len(nodes)
