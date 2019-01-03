@@ -63,25 +63,30 @@ class Region(object):
     @staticmethod
     def from_subvolume(subvolume, **kwargs):
         if subvolume.label_mask is not None and np.issubdtype(
-            subvolume.label_mask.dtype, np.bool
+            subvolume.label_mask.dtype, np.bool_
         ):
             target = mask_to_output_target(subvolume.label_mask)
         else:
             target = subvolume.label_mask
-        return Region(subvolume.image, target=target, seed_vox=subvolume.seed, **kwargs)
+        return Region(
+            subvolume.image,
+            target=target,
+            seed_vox=subvolume.seed,
+            orig_bounds=subvolume.bounds,
+            **kwargs
+        )
 
     @staticmethod
     def from_subvolume_generator(subvolumes, **kwargs):
-        subvolumes = itertools.ifilter(
-            lambda s: s.has_uniform_seed_margin(), subvolumes
-        )
-        return itertools.imap(lambda v: Region.from_subvolume(v, **kwargs), subvolumes)
+        subvolumes = filter(lambda s: s.has_uniform_seed_margin(), subvolumes)
+        return map(lambda v: Region.from_subvolume(v, **kwargs), subvolumes)
 
     def __init__(
         self,
         image,
         target=None,
         seed_vox=None,
+        orig_bounds=None,
         mask=None,
         sparse_mask=False,
         block_padding=None,
@@ -91,6 +96,7 @@ class Region(object):
         self.queue = queue.PriorityQueue()
         self.visited = set()
         self.image = image
+        self.orig_bounds = orig_bounds
         self.bounds = np.array(image.shape, dtype=np.int64)
         if seed_vox is None:
             self.MOVE_GRID_OFFSET = np.array([0, 0, 0], dtype=np.int64)
