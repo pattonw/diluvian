@@ -389,7 +389,7 @@ def fill_volume_with_model(
         logging.info(
             "Filled seed ({}) with {} voxels labeled {}.".format(
                 np.array_str(seed), body_size, label_id
-        )
+            )
         )
 
         if max_bodies and label_id >= max_bodies:
@@ -677,256 +677,7 @@ def fill_skeleton_with_model_threaded(
         while True:
             node = nodes.get(True)
 
-            if not 
-            if is_revoked(node):
-                results.put((node, None))
-                continue
-
-            def stopping_callback(region):
-                stop = is_revoked(node)
-                if (
-                    reject_non_seed_components
-                    and region.bias_against_merge
-                    and region.mask[tuple(region.seed_vox)] < 0.5
-                ):
-                    stop = True
-                return stop
-
-            logging.debug("Worker %s: got seed %s", worker_id, str(node))
-
-            logging.debug(
-                "start: {0}".format(node[2:] - np.floor_divide(region_shape, 2))
-            )
-            logging.debug(
-                "stop: {0}".format(node[2:] + np.floor_divide(region_shape, 2) + 1)
-            )
-
-            image = volume.get_subvolume(
-                SubvolumeBounds(
-                    start=(node[2:]) - np.floor_divide(region_shape, 2),
-                    stop=(node[2:]) + np.floor_divide(region_shape, 2) + 1,
-                    node_id=node[0:2],
-                )
-            ).image
-
-            # Flood-fill and get resulting mask.
-            # Allow reading outside the image volume bounds to allow segmentation
-            # to fill all the way to the boundary.
-            region = Region(
-                image,
-                seed_vox=np.floor_divide(np.array(image.shape), 2) + 1,
-                sparse_mask=False,
-                block_padding="reflect",
-            )
-            region.bias_against_merge = bias
-            try:
-                six.next(
-                    region.fill(
-                        model,
-                        move_batch_size=move_batch_size,
-                        max_moves=max_moves,
-                        stopping_callback=stopping_callback,
-                        remask_interval=remask_interval,
-                    )
-                )
-            except Region.EarlyFillTermination:
-                logging.debug("Worker %s: node %s failed to fill", worker_id, str(node))
-            except StopIteration:
-                pass
-            logging.debug("Worker %s: node %s filled", worker_id, str(node))
-
-            results.put((node, region.to_body()))
-
-    if volumes is None:
-        raise ValueError("Volumes must be provided.")
-    elif len(volumes) > 1:
-        # TODO: support multiple volumes
-        raise ValueError("WIP. multiple volumes not yet supported")
-
-    """
-    Generate regions to fill:
-
-    Each region should be a small area around a point on the skeleton.
-    After flood filling all regions, I will look for intersections or the
-    lack thereof that will indicate false mergers, allong with heavy
-    segmentation perpendicular to skeleton that may indicate missing
-    branches.
-
-    """
-
-    vol_name = list(volumes.keys())[0]
-    volume = volumes[vol_name].downsample(CONFIG.volume.resolution)
-    seeds, ids = seeds_from_skeleton(skeleton_file)
-    # seeds = [
-    #    list(volume.world_coord_to_local(volume.real_coord_to_pixel(seed)))
-    #    for seed in seeds
-    # ]
-    seeds = [list(volume.world_coord_to_local(seed)) for seed in seeds]
-    nodes = [np.array(ids[i] + seeds[i]) for i in range(len(seeds))]
-    skel = Skeleton()
-    skel.input_nid_pid_x_y_z(nodes)
-    region_shape = CONFIG.model.input_fov_shape
-
-    pbar = tqdm(desc="Node queue", total=len(nodes), miniters=1, smoothing=0.0)
-    num_nodes = len(nodes)
-    nodes = iter(nodes)
-
-    manager = Manager()
-    # Queue of seeds to be picked up by workers.
-    node_queue = manager.Queue()
-    # Queue of results from workers.
-    results_queue = manager.Queue()
-    # Dequeue of seeds that were put in seed_queue but have not yet been
-    # combined by the main process.
-    dispatched_nodes = deque()
-    # Seeds that were placed in seed_queue but subsequently covered by other
-    # results before their results have been processed. This allows workers to
-    # abort working on these seeds by checking this list.
-    revoked_nodes = manager.list()
-    # Results that have been received by the main process but have not yet
-    # been combined because they were not received in the dispatch order.
-    unordered_results = {}
-
-    def queue_next_node():
-        total = 0
-        for node in nodes:
-            if skel.is_filled(node[0]):
-                # This seed has already been filled.
-                total += 1
-                continue
-            dispatched_nodes.append(node)
-            node_queue.put(node)
-
-            break
-
-        return total
-
-    for _ in range(min(num_nodes, num_workers * worker_prequeue)):
-        processed_nodes = queue_next_node()
-        pbar.update(processed_nodes)
-
-    if "CUDA_VISIBLE_DEVICES" in os.environ:
-        set_devices = False
-        num_workers = 1
-        logging.warn(
-            "Environment variable CUDA_VISIBLE_DEVICES is set, so only one worker can be used.\n"
-            "See https://github.com/aschampion/diluvian/issues/11"
-        )
-    else:
-        set_devices = True
-
-    workers = []
-    loading_lock = manager.Lock()
-    for worker_id in range(num_workers):
-        w = Process(
-            target=worker,
-            args=(
-                worker_id,
-                set_devices,
-                model_file,
-                volume,
-                region_shape,
-                node_queue,
-                results_queue,
-                loading_lock,
-                revoked_nodes,
-            ),
-        )
-        w.start()
-        workers.append(w)
-
-    # For each seed, create region, fill, threshold, and merge to output volume.
-    while dispatched_nodes:
-        processed_nodes = 1
-        expected_node = dispatched_nodes.popleft()
-        logging.debug("Expecting node %s", np.array_str(expected_node))
-
-        if tuple(expected_node) in unordered_results:
-            logging.debug(
-                "Expected node %s is in old results", np.array_str(expected_node)
-            )
-            node = expected_node
-            body = unordered_results[tuple(node)]
-            del unordered_results[tuple(node)]
-
-        else:
-            node, body = results_queue.get(True)
-            processed_nodes += queue_next_node()
-
-            while not np.array_equal(node, expected_node):
-                logging.debug("Node %s is early, stashing", np.array_str(node))
-                unordered_results[tuple(node)] = body
-                node, body = results_queue.get(True)
-                processed_nodes += queue_next_node()
-
-        logging.debug("Processing node at %s", np.array_str(node))
-        pbar.update(processed_nodes)
-
-        if skel.is_filled(node[0]):
-            # This seed has already been filled.
-            logging.debug(
-                "Node (%s) was filled but has been covered in the meantime.",
-                np.array_str(node),
-            )
-            loading_lock.acquire()
-            if tuple(node) in revoked_nodes:
-                revoked_nodes.remove(tuple(node))
-            loading_lock.release()
-            continue
-
-        if body is None:
-            raise Exception("Body is None.")
-
-        if not body.is_seed_in_mask():
-            logging.debug("Seed (%s) is not in its body.", np.array_str(node[2:]))
-
-        mask, bounds = body._get_bounded_mask(CONFIG.postprocessing.closing_shape)
-
-        body_size = np.count_nonzero(mask)
-
-        if body_size == 0:
-            logging.debug("Body is empty.")
-
-        logging.debug("Adding body to prediction label volume.")
-
-        orig_bounds = SubvolumeBounds(
-            start=node[2:] - np.floor_divide(region_shape, 2),
-            stop=node[2:] + np.floor_divide(region_shape, 2) + 1,
-        )
-        skel.fill(node[0], orig_bounds, body)
-
-        logging.debug("Filled node (%s)", np.array_str(node))
-
-    for _ in range(num_workers):
-        node_queue.put("DONE")
-    for wid, worker in enumerate(workers):
-        worker.join()
-    manager.shutdown()
-
-    pbar.close()
-
-    if save_output_file:
-        skel.save_rankings(save_output_file)
-
-    while save_output_file is None:
-        s = raw_input(
-            "Press Enter to continue, "
-            "r to 3D render body, "
-            "rs to 3D render body with seeds, "
-            "s to save masks for visualization elsewhere, "
-            "q to quit..."
-        )
-        if s == "q":
-            return
-        elif s == "rs":
-            skel.render_skeleton()
-        elif s == "r":
-            skel.render_large_skeleton()
-        elif s == "s":
-            s = raw_input("Please enter the desired file name:\n")
-            skel.save_skeleton_masks(s)
-        else:
-            breakisinstance(node, np.ndarray):
+            if not isinstance(node, np.ndarray):
                 logging.debug("Worker %s: got DONE", worker_id)
                 break
 
@@ -1179,6 +930,98 @@ def fill_skeleton_with_model_threaded(
             skel.save_skeleton_masks(s)
         else:
             break
+
+
+def fill_skeleton_with_model(
+    model_file,
+    skeleton_file,
+    volumes=None,
+    partition=False,
+    augment=False,
+    bounds_input_file=None,
+    bias=True,
+    move_batch_size=1,
+    max_moves=None,
+    remask_interval=None,
+    sparse=False,
+    moves=None,
+):
+
+    # Late import to avoid Keras import until TF bindings are set.
+    from .network import load_model
+
+    if volumes is None:
+        raise ValueError("Volumes must be provided.")
+
+    """
+    Generate regions to fill:
+
+    Each region should be a small area around a point on the skeleton.
+    After flood filling all regions, I will look for intersections or the
+    lack thereof that will indicate false mergers, allong with heavy
+    segmentation perpendicular to skeleton that may indicate missing
+    branches.
+
+    """
+
+    subvolume_bounds = get_skeleton_bounds(
+        skeleton_file, volumes, num_bounds=1, moves=0
+    )
+
+    gen_kwargs = {
+        k: {"bounds_generator": iter(subvolume_bounds[k])} for k in volumes.keys()
+    }
+
+    subvolumes = [
+        v.downsample(CONFIG.volume.resolution).subvolume_generator(**gen_kwargs[k])
+        for k, v in six.iteritems(volumes)
+    ]
+
+    skeleton = Roundrobin(
+        *[
+            Region.from_subvolume_generator(v, block_padding="reflect")
+            for v in subvolumes
+        ]
+    )
+
+    # load the model as usual.
+    model = load_model(model_file, CONFIG.network)
+
+    skel = Skeleton()
+    for region in skeleton:
+        region.bias_against_merge = bias
+        try:
+            six.next(
+                region.fill(
+                    model,
+                    progress=True,
+                    move_batch_size=move_batch_size,
+                    max_moves=max_moves,
+                    remask_interval=remask_interval,
+                )
+            )
+        except (StopIteration, Region.EarlyFillTermination):
+            pass
+        skel.add_region(region, True)
+    while True:
+        s = raw_input(
+            "Press Enter to continue, " "r to 3D render body, " "q to quit..."
+        )
+        if s == "q":
+            return
+        elif s == "r":
+            skel.render_skeleton()
+        elif s == "s":
+            skel.save_skeleton_mask_mesh("output_file")
+        else:
+            break
+
+    # I will want to view the results for the full skeleton, not individual sections of it
+    while True:
+        print("Visualizations to be implemented")
+        break
+
+
 def evaluate_volume(
     volumes,
     gt_name,
