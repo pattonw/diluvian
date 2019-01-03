@@ -760,11 +760,10 @@ def fill_skeleton_with_model_threaded(
     vol_name = list(volumes.keys())[0]
     volume = volumes[vol_name].downsample(CONFIG.volume.resolution)
     seeds, ids = seeds_from_skeleton(skeleton_file)
-    # seeds = [
-    #    list(volume.world_coord_to_local(volume.real_coord_to_pixel(seed)))
-    #    for seed in seeds
-    # ]
-    seeds = [list(volume.world_coord_to_local(seed)) for seed in seeds]
+    seeds = [
+        list(volume.world_coord_to_local(volume.real_coord_to_pixel(seed)))
+        for seed in seeds
+    ]
     nodes = [np.array(ids[i] + seeds[i]) for i in range(len(seeds))]
     skel = Skeleton()
     skel.input_nid_pid_x_y_z(nodes)
@@ -892,11 +891,7 @@ def fill_skeleton_with_model_threaded(
 
         logging.debug("Adding body to prediction label volume.")
 
-        orig_bounds = SubvolumeBounds(
-            start=node[2:] - np.floor_divide(region_shape, 2),
-            stop=node[2:] + np.floor_divide(region_shape, 2) + 1,
-        )
-        skel.fill(node[0], orig_bounds, body)
+        skel.fill(node[0], body)
 
         logging.debug("Filled node (%s)", np.array_str(node))
 
@@ -908,7 +903,7 @@ def fill_skeleton_with_model_threaded(
 
     pbar.close()
 
-    if save_output_file:
+    if save_output_file is not None:
         skel.save_rankings(save_output_file)
 
     while save_output_file is None:
