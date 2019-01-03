@@ -677,7 +677,6 @@ def fill_skeleton_with_model_threaded(
         while True:
             node = nodes.get(True)
 
-            if not 
             if is_revoked(node):
                 results.put((node, None))
                 continue
