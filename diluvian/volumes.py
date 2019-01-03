@@ -902,12 +902,12 @@ class Volume(object):
         def __iter__(self):
             while True:
                 if not self.seeds:
-                ctr = np.array(
-                    [
-                        self.random.randint(self.ctr_min[n], self.ctr_max[n])
-                        for n in range(3)
-                    ]
-                ).astype(np.int64)
+                    ctr = np.array(
+                        [
+                            self.random.randint(self.ctr_min[n], self.ctr_max[n])
+                            for n in range(3)
+                        ]
+                    ).astype(np.int64)
                 else:
                     ctr = self.volume.world_coord_to_local(next(self.seeds))
                 start = ctr - self.margin
