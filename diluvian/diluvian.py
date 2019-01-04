@@ -879,10 +879,14 @@ def fill_skeleton_with_model_threaded(
             continue
 
         if body is None:
-            raise Exception("Body is None.")
+            logging.debug("Body of Node ({}) is None".format(node))
+            skel.fill(node[0], None)
+            continue
 
         if not body.is_seed_in_mask():
             logging.debug("Seed (%s) is not in its body.", np.array_str(node[2:]))
+            skel.fill(node[0], None)
+            continue
 
         mask, bounds = body._get_bounded_mask(CONFIG.postprocessing.closing_shape)
 
@@ -890,11 +894,11 @@ def fill_skeleton_with_model_threaded(
 
         if body_size == 0:
             logging.debug("Body is empty.")
+            skel.fill(node[0], None)
+            continue
 
         logging.debug("Adding body to prediction label volume.")
-
-        skel.fill(node[0], body)
-
+        skel.fill(node[0], mask)
         logging.debug("Filled node (%s)", np.array_str(node))
 
     for _ in range(num_workers):
