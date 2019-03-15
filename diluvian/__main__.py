@@ -215,6 +215,35 @@ def _make_main_parser():
             'num_bounds', default=None, type=int,
             help='Number of bounds to generate.')
 
+    skeleton_fill_parser = commandparsers.add_parser(
+        "skeleton-fill",
+        parents=[common_parser, fill_common_parser, bounds_common_parser],
+        help="Seed periodically allong skeleton to look for false merges and missed branches.",
+    )
+    skeleton_fill_parser.add_argument(
+        "skeleton_file",
+        default=None,
+        help="File containing the skeleton for validation. Currently supports csv file types.",
+    )
+
+    p_skeleton_fill_parser = commandparsers.add_parser(
+        "skeleton-fill-parallel",
+        parents=[common_parser, fill_common_parser, bounds_common_parser],
+        help="Seed periodically allong skeleton to look for false merges and missed branches.",
+    )
+    p_skeleton_fill_parser.add_argument(
+        "skeleton_file",
+        default=None,
+        help="File containing the skeleton for validation. Currently supports csv file types.",
+    )
+    p_skeleton_fill_parser.add_argument(
+        "-s",
+        "--save-output",
+        dest="results_file",
+        default=None,
+        help="Filename for the storage of the floodfilling output data.",
+    )
+
     return parser
 
 
@@ -355,6 +384,44 @@ def main():
                                   args.num_bounds,
                                   moves=args.bounds_num_moves)
 
+    elif args.command == "skeleton-fill":
+        # Late import to prevent loading large modules for short CLI commands.
+        init_seeds()
+        from .diluvian import fill_skeleton_with_model
+
+        volumes = load_volumes(args.volume_files, args.in_memory)
+        fill_skeleton_with_model(
+            args.model_file,
+            args.skeleton_file,
+            volumes=volumes,
+            partition=args.partition_volumes,
+            bias=args.bias,
+            move_batch_size=args.move_batch_size,
+            max_moves=args.max_moves,
+            remask_interval=args.remask_interval,
+            moves=args.bounds_num_moves,
+        )
+
+    elif args.command == "skeleton-fill-parallel":
+
+        # Late import to prevent loading large modules for short CLI commands.
+        init_seeds()
+        from .diluvian import fill_skeleton_with_model_threaded
+
+        volumes = load_volumes(args.volume_files, args.in_memory)
+        fill_skeleton_with_model_threaded(
+            args.model_file,
+            args.skeleton_file,
+            volumes=volumes,
+            partition=args.partition_volumes,
+            bias=args.bias,
+            move_batch_size=args.move_batch_size,
+            max_moves=args.max_moves,
+            remask_interval=args.remask_interval,
+            moves=args.bounds_num_moves,
+            save_output_file=args.results_file,
+        )
+
 
 def load_volumes(volume_files, in_memory, name_regex=None):
     """Load HDF5 volumes specified in a TOML description file.
@@ -372,12 +439,14 @@ def load_volumes(volume_files, in_memory, name_regex=None):
     """
     # Late import to prevent loading large modules for short CLI commands.
     from .volumes import HDF5Volume
+    from .volumes import ImageStackVolume
 
     print('Loading volumes...')
     if volume_files:
         volumes = {}
         for volume_file in volume_files:
             volumes.update(HDF5Volume.from_toml(volume_file))
+            volumes.update(ImageStackVolume.from_toml(volume_file))
     else:
         volumes = HDF5Volume.from_toml(os.path.join(os.path.dirname(__file__), 'conf', 'cremi_datasets.toml'))
 

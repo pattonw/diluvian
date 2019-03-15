@@ -71,10 +71,29 @@ def partition_volumes(volumes, downsample=True):
 
 class SubvolumeBounds(object):
     """Sufficient parameters to extract a subvolume from a volume."""
-    __slots__ = ('start', 'stop', 'seed', 'label_id', 'label_margin',)
 
-    def __init__(self, start=None, stop=None, seed=None, label_id=None, label_margin=None):
-        assert (start is not None and stop is not None) or seed is not None, "Bounds or seed must be provided"
+    __slots__ = (
+        "start",
+        "stop",
+        "seed",
+        "label_id",
+        "label_margin",
+        "center_vox",
+        "node_id",
+    )
+
+    def __init__(
+        self,
+        start=None,
+        stop=None,
+        seed=None,
+        label_id=None,
+        label_margin=None,
+        node_id=None,
+    ):
+        assert (
+            start is not None and stop is not None
+        ) or seed is not None, "Bounds or seed must be provided"
         self.start = start
         self.stop = stop
         self.seed = seed
@@ -82,6 +101,8 @@ class SubvolumeBounds(object):
         if label_margin is None:
             label_margin = np.zeros(3, dtype=np.int64)
         self.label_margin = label_margin
+        self.center_vox = np.floor_divide(start + stop, 2)
+        self.node_id = node_id
 
     @classmethod
     def iterable_from_csv(cls, filename):
@@ -112,13 +133,15 @@ class SubvolumeBounds(object):
 
 class Subvolume(object):
     """A subvolume of image data and an optional ground truth object mask."""
-    __slots__ = ('image', 'label_mask', 'seed', 'label_id',)
 
-    def __init__(self, image, label_mask, seed, label_id):
+    __slots__ = ("image", "label_mask", "seed", "label_id", "bounds")
+
+    def __init__(self, image, label_mask, seed, label_id, bounds=None):
         self.image = image
         self.label_mask = label_mask
         self.seed = seed
         self.label_id = label_id
+        self.bounds = bounds
 
     def f_a(self):
         """Calculate the mask filling fraction of this subvolume.
@@ -187,7 +210,7 @@ class SubvolumeGenerator(six.Iterator):
         self.bounds_generator.reset()
 
     def __next__(self):
-        return self.volume.get_subvolume(six.next(self.bounds_generator))
+        return self.volume.get_subvolume(next(self.bounds_generator))
 
 
 class ErodedMaskGenerator(six.Iterator):
@@ -682,8 +705,10 @@ class Volume(object):
     def sparse_wrapper(self, *args):
         return SparseWrappedVolume(self, *args)
 
-    def subvolume_bounds_generator(self, shape=None, label_margin=None):
-        return self.SubvolumeBoundsGenerator(self, shape, label_margin)
+    def subvolume_bounds_generator(
+        self, shape=None, label_margin=None, seeds=None, ids=None
+    ):
+        return self.SubvolumeBoundsGenerator(self, shape, label_margin, seeds, ids)
 
     def subvolume_generator(self, bounds_generator=None, **kwargs):
         if bounds_generator is None:
@@ -728,10 +753,10 @@ class Volume(object):
             label_mask = None
             label_id = None
 
-        return Subvolume(image_subvol, label_mask, seed, label_id)
+        return Subvolume(image_subvol, label_mask, seed, label_id, bounds)
 
     class SubvolumeBoundsGenerator(six.Iterator):
-        def __init__(self, volume, shape, label_margin=None):
+        def __init__(self, volume, shape, label_margin=None, seeds=None, ids=None):
             self.volume = volume
             self.shape = shape
             self.margin = np.floor_divide(self.shape, 2).astype(np.int64)
@@ -742,6 +767,14 @@ class Volume(object):
             self.ctr_min = self.margin
             self.ctr_max = (np.array(self.volume.shape) - self.margin - 1).astype(np.int64)
             self.random = np.random.RandomState(CONFIG.random_seed)
+            if seeds:
+                self.seeds = iter(seeds)
+            else:
+                self.seeds = None
+            if ids:
+                self.ids = iter(ids)
+            else:
+                self.ids = None
 
             # If the volume has a mask channel, further limit ctr_min and
             # ctr_max to lie inside a margin in the AABB of the mask.
@@ -759,23 +792,34 @@ class Volume(object):
                                  np.array_str(self.ctr_min), np.array_str(self.ctr_max), np.array_str(self.shape)))
 
         def __iter__(self):
-            return self
-
-        def reset(self):
-            self.random.seed(0)
-
-        def __next__(self):
             while True:
-                ctr = np.array([self.random.randint(self.ctr_min[n], self.ctr_max[n])
-                                for n in range(3)]).astype(np.int64)
+                if not self.seeds:
+                    ctr = np.array(
+                        [
+                            self.random.randint(self.ctr_min[n], self.ctr_max[n])
+                            for n in range(3)
+                        ]
+                    ).astype(np.int64)
+                else:
+                    ctr = self.volume.world_coord_to_local(next(self.seeds))
                 start = ctr - self.margin
                 stop = ctr + self.margin + np.mod(self.shape, 2).astype(np.int64)
+
+                node_id = None
+                if self.ids:
+                    node_id = next(self.ids)
 
                 # If the volume has a mask channel, only accept subvolumes
                 # entirely contained in it.
                 if self.volume.mask_data is not None:
-                    start_local = self.volume.world_coord_to_local(start + self.label_margin)
-                    stop_local = self.volume.world_coord_to_local(stop - self.label_margin)
+                    start_local = self.volume.world_coord_to_local(
+                        start + self.label_margin
+                    )
+                    start_local = start + self.label_margin
+                    stop_local = self.volume.world_coord_to_local(
+                        stop - self.label_margin
+                    )
+                    stop_local = stop - self.label_margin
                     mask = self.volume.mask_data[
                             start_local[0]:stop_local[0],
                             start_local[1]:stop_local[1],
@@ -806,7 +850,19 @@ class Volume(object):
                     label_id = label_ids.item(0)
                     break
 
-            return SubvolumeBounds(start, stop, label_id=label_id, label_margin=self.label_margin)
+            yield SubvolumeBounds(
+                start,
+                stop,
+                label_id=label_id,
+                label_margin=self.label_margin,
+                node_id=node_id,
+            )
+
+        def __next__(self):
+            return next(self.__iter__())
+
+        def reset(self):
+            self.random.seed(0)
 
 
 class NdarrayVolume(Volume):
@@ -948,9 +1004,12 @@ class DownsampledVolume(VolumeView):
     def get_subvolume(self, bounds):
         subvol_shape = bounds.stop - bounds.start
         label_shape = subvol_shape - 2 * bounds.label_margin
-        parent_bounds = SubvolumeBounds(self.local_to_parent(bounds.start),
+        parent_bounds = SubvolumeBounds(
+            self.local_to_parent(bounds.start),
                                         self.local_to_parent(bounds.stop),
-                                        label_margin=self.local_to_parent(bounds.label_margin))
+            label_margin=self.local_to_parent(bounds.label_margin),
+            node_id=bounds.node_id,
+        )
         subvol = self.parent.get_subvolume(parent_bounds)
         subvol.image = subvol.image.reshape(
                 [subvol_shape[0], self.scale[0],
@@ -978,6 +1037,11 @@ class DownsampledVolume(VolumeView):
         # sense, just a rescaling of the coordinate in the subvolume-local
         # coordinates. Hence no similar call in VolumeView.get_subvolume.
         subvol.seed = self.parent_to_local(subvol.seed)
+
+        orig_bounds = subvol.bounds
+        orig_bounds.start = orig_bounds.start // self.scale
+        orig_bounds.stop = orig_bounds.stop // self.scale
+        subvol.bounds = orig_bounds
 
         return subvol
 
