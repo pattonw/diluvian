@@ -1656,7 +1656,7 @@ class N5Volume(Volume):
         remaining_leaves = set()
 
         for seed in seeds:
-            center = np.array(seed[2:])
+            center = np.array(seed)
             bounds = (center - region_shape // 2, center + region_shape // 2 + 1)
             leaf_bounds = (bounds[0] // dataset.leaf_shape, (bounds[1] + dataset.leaf_shape - 1) // dataset.leaf_shape)
             logging.debug("seed {}, leaf_bounds {}".format(center, leaf_bounds))
