@@ -996,7 +996,7 @@ def fill_skeleton_with_model_threaded(
     volume = volumes[vol_name].downsample(CONFIG.volume.resolution)
     seeds, ids = seeds_from_skeleton(skeleton_file)
     seeds = [
-       list(volume.world_coord_to_local(volume.parent.real_coord_to_pixel(seed)))
+       list(volume.world_coord_to_local(volume.parent.real_coord_to_world(seed)))
        for seed in seeds
     ]
     nodes = [np.array(ids[i] + seeds[i]) for i in range(len(seeds))]
