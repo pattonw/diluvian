@@ -1453,7 +1453,7 @@ class N5Volume(Volume):
                 root_path = volume_config["root_path"]
                 datasets = volume_config["datasets"]
                 resolution = volume_config.get("resolution", None)
-                translation = volume_config.get["translation", None]
+                translation = volume_config.get("translation", None)
                 bounds = volume_config.get("bounds", None)
                 volume = N5Volume(
                     root_path,
