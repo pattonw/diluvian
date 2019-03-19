@@ -1001,18 +1001,17 @@ def fill_skeleton_with_model_threaded(
     assert all(CONFIG.model.input_fov_shape == np.array([25, 97, 97])), CONFIG.model.input_fov_shape
     logging.debug("input_fov_shape: {}".format(CONFIG.model.input_fov_shape))
 
-    results = {}
-
     vol_name = list(volumes.keys())[0]
     volume = volumes[vol_name].downsample(CONFIG.volume.resolution)
     seeds, ids = seeds_from_skeleton(skeleton_file)
+    original_nodes = [ids[i] + seeds[i] for i in range(len(seeds))]
     seeds = [
        list(volume.world_coord_to_local(volume.parent.real_coord_to_world(seed)))
        for seed in seeds
     ]
     nodes = [np.array(ids[i] + seeds[i]) for i in range(len(seeds))]
     skel = sarbor.Skeleton()
-    skel.input_nid_pid_x_y_z(nodes)
+    skel.input_nid_pid_x_y_z(original_nodes)
     region_shape = CONFIG.model.input_fov_shape
     region_shape += 2 * (region_shape // 4)
 
@@ -1150,7 +1149,6 @@ def fill_skeleton_with_model_threaded(
 
         logging.debug("Adding body to prediction label volume.")
 
-        results[tuple(node[2:])] = mask
         skel.fill(node[0], mask)
 
         logging.info("Filling {} succeeded".format(node[0]))
@@ -1163,9 +1161,11 @@ def fill_skeleton_with_model_threaded(
 
     pbar.close()
 
+    results = [(node.key, node.parent_key, node.value.center, node.value.mask) for node in skel.get_nodes()]
+
     if save_output_file:
         import pickle
-        pickle.dump(results, open(save_output_file, "wb"))
+        pickle.dump(results, open(save_output_file + "_masks.obj", "wb"))
 
 def evaluate_volume(
         volumes,
