@@ -1128,12 +1128,12 @@ def fill_skeleton_with_model_threaded(
             continue
 
         if body is None:
-            logging.debug("Filling {} failed".format(node[0]))
+            logging.info("Filling {} failed".format(node[0]))
             logging.debug("No body was created")
             continue
 
         if not body.is_seed_in_mask():
-            logging.debug("Filling {} failed".format(node[0]))
+            logging.info("Filling {} failed".format(node[0]))
             logging.debug("Seed (%s) is not in its body.", np.array_str(node[2:]))
             continue
 
@@ -1150,7 +1150,7 @@ def fill_skeleton_with_model_threaded(
 
         skel.fill(node[0], mask)
 
-        logging.debug("Filling {} succeeded".format(node[0]))
+        logging.info("Filling {} succeeded".format(node[0]))
 
     for _ in range(num_workers):
         node_queue.put("DONE")
