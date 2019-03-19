@@ -877,6 +877,7 @@ def fill_skeleton_with_model_threaded(
     ):
         lock.acquire()
         import tensorflow as tf
+        from tensorflow.python.client import device_lib
 
         if set_devices:
             # Only make one GPU visible to Tensorflow so that it does not allocate
@@ -958,6 +959,7 @@ def fill_skeleton_with_model_threaded(
             )
             region.bias_against_merge = bias
             try:
+                logging.warn(device_lib.list_local_devices())
                 six.next(
                     region.fill(
                         model,
