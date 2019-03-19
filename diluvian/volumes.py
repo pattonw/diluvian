@@ -1506,6 +1506,8 @@ class N5Volume(Volume):
         self.mask_config = datasets.get("masks", None)
         self.label_config = datasets.get("labels", None)
 
+        assert self.image_data is not None, "image data cannot be None"
+
     @property
     def dtype_map(self):
         return self._dtype_map
