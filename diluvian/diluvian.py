@@ -959,7 +959,7 @@ def fill_skeleton_with_model_threaded(
             )
             region.bias_against_merge = bias
             try:
-                logging.warn(backend.tensorflow_backend._get_available_gpus())
+                #  logging.warn(backend.tensorflow_backend._get_available_gpus())
                 six.next(
                     region.fill(
                         model,
