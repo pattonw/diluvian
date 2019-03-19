@@ -1502,9 +1502,9 @@ class N5Volume(Volume):
 
         # Initialization of data sources done in setter methods
         self.root_path = root_path
-        self.image_config = datasets.get("image", None)
-        self.mask_config = datasets.get("mask", None)
-        self.label_config = datasets.get("label", None)
+        self.image_config = datasets.get("images", None)
+        self.mask_config = datasets.get("masks", None)
+        self.label_config = datasets.get("labels", None)
 
     @property
     def dtype_map(self):
@@ -1541,6 +1541,7 @@ class N5Volume(Volume):
                 populator=self.image_populator,
             )
         else:
+            raise ValueError("N5Volume must have image data")
             self._image_data = None
 
     @property
