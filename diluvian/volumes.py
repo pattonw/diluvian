@@ -1493,9 +1493,9 @@ class N5Volume(Volume):
             "FLOAT32": np.float32,
             "FLOAT64": np.float64,
         }
-        self.bounds = bounds
-        self.resolution = resolution
-        self.translation = translation
+        self.bounds = np.array(bounds) if bounds is not None else None
+        self.resolution = np.array(resolution) if resolution is not None else None
+        self.translation = np.array(translation) if translation is not None else None
 
         self.scale = np.exp2(np.array([0, 0, 0])).astype(np.int64)
         self.data_shape = (np.array([0, 0, 0]), self.bounds / self.scale)
