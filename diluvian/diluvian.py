@@ -877,7 +877,6 @@ def fill_skeleton_with_model_threaded(
     ):
         lock.acquire()
         import tensorflow as tf
-        from tensorflow.python.client import device_lib
 
         if set_devices:
             # Only make one GPU visible to Tensorflow so that it does not allocate
@@ -889,6 +888,7 @@ def fill_skeleton_with_model_threaded(
         with tf.device("/gpu:0"):
             # Late import to avoid Keras import until TF bindings are set.
             from .network import load_model
+            from keras import backend
 
             logging.debug("Worker %s: loading model", worker_id)
             model = load_model(model_file, CONFIG.network)
@@ -959,7 +959,7 @@ def fill_skeleton_with_model_threaded(
             )
             region.bias_against_merge = bias
             try:
-                logging.warn(device_lib.list_local_devices())
+                logging.warn(backend.tensorflow_backend._get_available_gpus())
                 six.next(
                     region.fill(
                         model,
