@@ -1526,7 +1526,7 @@ class N5Volume(Volume):
 
     @property
     def octree_leaf_shape(self):
-        return np.array([10, 10, 10])
+        return np.array([26, 256, 256])
 
     @property
     def image_config(self):
@@ -1664,12 +1664,13 @@ class N5Volume(Volume):
                 for j in range(leaf_bounds[0][1], leaf_bounds[1][1]):
                     for k in range(leaf_bounds[0][2], leaf_bounds[1][2]):
                         remaining_leaves.add((i, j, k))
+
+        num_leaves = len(remaining_leaves)
         
         def leaf_fetcher(fetcher_id, dataset, leaf_queue, done_leaves, done_fetchers):
             while True:
                 try:
                     leaf = np.array(leaf_queue.get(False))
-                    logging.debug("Got leaf {}!".format(leaf))
                 except queue.Empty:
                     logging.debug("Fetcher {} Done".format(fetcher_id))
                     with done_fetchers.get_lock():
@@ -1696,7 +1697,7 @@ class N5Volume(Volume):
             try:
                 done_leaves.get(False)
                 leaf_queue.put(remaining_leaves.pop())
-                print("{} leaves left!",format(len(remaining_leaves) + num_processes))
+                logging.info("{} leaves left of {}!",format(len(remaining_leaves) + num_processes, num_leaves))
             except queue.Empty:
                 continue
             except Exception as e:
