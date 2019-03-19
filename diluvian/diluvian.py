@@ -959,7 +959,11 @@ def fill_skeleton_with_model_threaded(
             )
             region.bias_against_merge = bias
             try:
-                assert all(CONFIG.model.input_fov_shape == np.array([25, 97, 97])), CONFIG.model.input_fov_shape
+                try:
+                    assert all(CONFIG.model.input_fov_shape == np.array([25, 97, 97])), CONFIG.model.input_fov_shape
+                except AssertionError:
+                    logging.debug("Config inpug_fov_shape changed! Resetting it to 25x97x97")
+                    CONFIG.model.input_fov_shape = np.array([25,97,97])
                 #  logging.warn(backend.tensorflow_backend._get_available_gpus())
                 six.next(
                     region.fill(
@@ -995,6 +999,7 @@ def fill_skeleton_with_model_threaded(
 
     """
     assert all(CONFIG.model.input_fov_shape == np.array([25, 97, 97])), CONFIG.model.input_fov_shape
+    logging.debug("input_fov_shape: {}".format(CONFIG.model.input_fov_shape))
 
     vol_name = list(volumes.keys())[0]
     volume = volumes[vol_name].downsample(CONFIG.volume.resolution)
