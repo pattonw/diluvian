@@ -1697,7 +1697,7 @@ class N5Volume(Volume):
             try:
                 done_leaves.get(False)
                 leaf_queue.put(remaining_leaves.pop())
-                logging.info("{} leaves left of {}!",format(len(remaining_leaves) + num_processes, num_leaves))
+                logging.info("{} leaves left of {}!".format(len(remaining_leaves) + num_processes, num_leaves))
             except queue.Empty:
                 continue
             except Exception as e:
