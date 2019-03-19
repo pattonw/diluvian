@@ -1008,7 +1008,7 @@ def fill_skeleton_with_model_threaded(
     region_shape += 2 * (region_shape // 4)
 
     for i in range(len(nodes)):
-        p = np.array(nodes[2:])
+        p = np.array(nodes[i][2:])
         _ = volume.image_data[tuple(map(slice,
                                         p - region_shape // 2,
                                         p + region_shape // 2))]
