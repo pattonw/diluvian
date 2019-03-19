@@ -1659,6 +1659,7 @@ class N5Volume(Volume):
             center = np.array(seed[2:])
             bounds = (center - region_shape // 2, center + region_shape // 2 + 1)
             leaf_bounds = (bounds[0] // dataset.leaf_shape, (bounds[1] + dataset.leaf_shape - 1) // dataset.leaf_shape)
+            logging.debug("seed {}, leaf_bounds {}".format(center, leaf_bounds))
             for i in range(leaf_bounds[0][0], leaf_bounds[1][0]):
                 for j in range(leaf_bounds[0][1], leaf_bounds[1][1]):
                     for k in range(leaf_bounds[0][2], leaf_bounds[1][2]):
