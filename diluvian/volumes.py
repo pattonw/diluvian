@@ -1458,9 +1458,9 @@ class N5Volume(Volume):
                     attributes_json = json.load(Path(root_path, datasets["images"]["path"], "attributes.json").open("r"))
                 except FileNotFoundError:
                     attributes_json = {}
-                resolution = volume_config.get("resolution", attributes_json.get("resolution", np.array([1, 1, 1])))
-                translation = volume_config.get("translation", np.array([0, 0, 0]))
-                bounds = volume_config.get("bounds", attributes_json.get("dimensions", np.array([1, 1, 1])))
+                resolution = volume_config.get("resolution", attributes_json.get("resolution", np.array([1, 1, 1])))[::-1]
+                translation = volume_config.get("translation", np.array([0, 0, 0]))[::-1]
+                bounds = volume_config.get("bounds", attributes_json.get("dimensions", np.array([1, 1, 1])))[::-1]
                 volume = N5Volume(
                     root_path,
                     datasets,
@@ -1610,7 +1610,7 @@ class N5Volume(Volume):
             return None
 
     def image_populator(self, bounds):
-        return pyn5.read(self.image_n5, (bounds[0], bounds[1]))
+        return pyn5.read(self.image_n5, (bounds[0][::-1], bounds[1][::-1]))
 
     @property
     def mask_n5(self):
