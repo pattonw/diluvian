@@ -1675,10 +1675,10 @@ class N5Volume(Volume):
                         done_fetchers.value += 1
                     break
                 _ = dataset[tuple(map(slice, leaf * dataset.leaf_shape, (leaf + 1) * dataset.leaf_shape))]
-                done_leaves.append(tuple(leaf))
+                done_leaves.put(tuple(leaf))
 
         for i in range(num_processes*5):
-            leaf_queue.append(remaining_leaves.pop())
+            leaf_queue.put(remaining_leaves.pop())
 
         fetchers = []
 
@@ -1694,7 +1694,7 @@ class N5Volume(Volume):
         while len(remaining_leaves) > 0:
             try:
                 done_leaves.pop()
-                leaf_queue.append(remaining_leaves.pop())
+                leaf_queue.put(remaining_leaves.pop())
                 print("{} leaves left!",format(len(remaining_leaves) + num_processes))
             except Exception as e:
                 logging.debug("Expected done_leaves is empty. Got: {}".format(e))
