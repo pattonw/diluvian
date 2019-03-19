@@ -1455,7 +1455,7 @@ class N5Volume(Volume):
                 root_path = volume_config["root_path"]
                 datasets = volume_config["datasets"]
                 try:
-                    attributes_json = json.load(Path(root_path, datasets, "attributes.json").open("r"))
+                    attributes_json = json.load(Path(root_path, datasets["images"]["path"], "attributes.json").open("r"))
                 except FileNotFoundError:
                     attributes_json = {}
                 resolution = volume_config.get("resolution", attributes_json.get("resolution", np.array([1, 1, 1])))
