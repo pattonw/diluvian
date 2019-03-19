@@ -1693,12 +1693,13 @@ class N5Volume(Volume):
 
         while len(remaining_leaves) > 0:
             try:
-                done_leaves.pop()
+                done_leaves.get(False)
                 leaf_queue.put(remaining_leaves.pop())
                 print("{} leaves left!",format(len(remaining_leaves) + num_processes))
+            except queue.Empty:
+                continue
             except Exception as e:
-                logging.debug("Expected done_leaves is empty. Got: {}".format(e))
-                pass
+                logging.debug(e)
 
         for wid, fetcher in enumerate(fetchers):
             fetcher.join()
