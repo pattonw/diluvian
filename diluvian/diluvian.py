@@ -1005,6 +1005,15 @@ def fill_skeleton_with_model_threaded(
     skel = sarbor.Skeleton()
     skel.input_nid_pid_x_y_z(nodes)
     region_shape = CONFIG.model.input_fov_shape
+    region_shape += 2 * (region_shape // 4)
+
+    for i in range(len(nodes)):
+        p = np.array(nodes[2:])
+        _ = volume.image_data[tuple(map(slice,
+                                        p - region_shape // 2,
+                                        p + region_shape // 2))]
+        logging.warning("{}/{} done!".format(i, len(nodes)))
+
 
     pbar = tqdm(desc="Node queue", total=len(nodes), miniters=1, smoothing=0.0)
     num_nodes = len(nodes)
