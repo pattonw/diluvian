@@ -1007,12 +1007,10 @@ def fill_skeleton_with_model_threaded(
     region_shape = CONFIG.model.input_fov_shape
     region_shape += 2 * (region_shape // 4)
 
-    for i in range(len(nodes)):
-        p = np.array(nodes[i][2:])
-        _ = volume.image_data[tuple(map(slice,
-                                        p - region_shape // 2,
-                                        p + region_shape // 2))]
-        logging.warning("{}/{} done!".format(i, len(nodes)))
+    volume.parent.initialize_many(volume.parent.image_data, [
+       list(volume.local_coord_to_world(seed))
+       for seed in seeds
+    ], region_shape * volume.scale)
 
 
     pbar = tqdm(desc="Node queue", total=len(nodes), miniters=1, smoothing=0.0)

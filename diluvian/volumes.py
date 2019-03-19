@@ -1641,3 +1641,64 @@ class N5Volume(Volume):
 
     def label_populator(self, bounds):
         return pyn5.read(self.label_n5, bounds)
+
+    def initialize_many(self, dataset, seeds, region_shape, num_processes=32):
+        from multiprocessing import Manager, Value, Process
+        import queue
+        
+        manager = Manager()
+        # Queue of seeds to be picked up by workers.
+        leaf_queue = manager.Queue()
+        done_leaves = manager.Queue()
+
+        done_fetchers = Value("i", 0)
+
+        remaining_leaves = set()
+
+        for seed in seeds:
+            center = np.array(seed[2:])
+            bounds = (center - region_shape // 2, center + region_shape // 2 + 1)
+            leaf_bounds = (bounds[0] // dataset.leaf_shape, (bounds[1] + dataset.leaf_shape - 1) // dataset.leaf_shape)
+            for i in range(leaf_bounds[0][0], leaf_bounds[1][0]):
+                for j in range(leaf_bounds[0][1], leaf_bounds[1][1]):
+                    for k in range(leaf_bounds[0][2], leaf_bounds[1][2]):
+                        remaining_leaves.add((i, j, k))
+        
+        def leaf_fetcher(fetcher_id, dataset, leaf_queue, done_leaves, done_fetchers):
+            while True:
+                try:
+                    leaf = np.array(leaf_queue.get(False))
+                    logging.debug("Got leaf {}!".format(leaf))
+                except queue.Empty:
+                    logging.debug("Fetcher {} Done".format(fetcher_id))
+                    with done_fetchers.get_lock():
+                        done_fetchers.value += 1
+                    break
+                _ = dataset[tuple(map(slice, leaf * dataset.leaf_shape, (leaf + 1) * dataset.leaf_shape))]
+                done_leaves.push(tuple(leaf))
+
+        for i in range(num_processes*5):
+            leaf_queue.push(remaining_leaves.pop())
+
+        fetchers = []
+
+        logging.debug("Starting Fetchers!")
+        for fetcher_id in range(num_processes):
+            fetcher = Process(
+                target=leaf_fetcher,
+                args=(fetcher_id, dataset, leaf_queue, done_leaves, done_fetchers),
+            )
+            fetcher.start()
+            fetchers.append(fetcher)
+
+        while len(remaining_leaves) > 0:
+            try:
+                done_leaves.pop()
+                leaf_queue.push(remaining_leaves.pop())
+            except Exception as e:
+                logging.debug("Expected done_leaves is empty. Got: {}".format(e))
+                pass
+
+        for wid, fetcher in enumerate(fetchers):
+            fetcher.join()
+            manager.shutdown()
