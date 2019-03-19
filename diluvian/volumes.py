@@ -1468,7 +1468,7 @@ class N5Volume(Volume):
                     resolution,
                     translation,
                 )
-                volumes[volume_config["title"]] = volume
+                volumes[volume_config["name"]] = volume
 
         return volumes
 
