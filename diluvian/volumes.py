@@ -20,6 +20,8 @@ from scipy import ndimage
 import six
 from six.moves import range as xrange
 import pyn5
+import json
+from pathlib import Path
 
 from .config import CONFIG
 from .octrees import OctreeVolume
@@ -1006,7 +1008,7 @@ class DownsampledVolume(VolumeView):
         label_shape = subvol_shape - 2 * bounds.label_margin
         parent_bounds = SubvolumeBounds(
             self.local_to_parent(bounds.start),
-                                        self.local_to_parent(bounds.stop),
+            self.local_to_parent(bounds.stop),
             label_margin=self.local_to_parent(bounds.label_margin),
             node_id=bounds.node_id,
         )
@@ -1452,9 +1454,13 @@ class N5Volume(Volume):
             for volume_config in volume_configs:
                 root_path = volume_config["root_path"]
                 datasets = volume_config["datasets"]
-                resolution = volume_config.get("resolution", None)
-                translation = volume_config.get("translation", None)
-                bounds = volume_config.get("bounds", None)
+                try:
+                    attributes_json = json.load(Path(root_path, datasets, "attributes.json").open("r"))
+                except FileNotFoundError:
+                    attributes_json = {}
+                resolution = volume_config.get("resolution", attributes_json.get("resolution", np.array([1, 1, 1])))
+                translation = volume_config.get("translation", np.array([0, 0, 0]))
+                bounds = volume_config.get("bounds", attributes_json.get("dimensions", np.array([1, 1, 1])))
                 volume = N5Volume(
                     root_path,
                     datasets,
