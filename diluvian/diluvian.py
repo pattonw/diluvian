@@ -1001,6 +1001,8 @@ def fill_skeleton_with_model_threaded(
     assert all(CONFIG.model.input_fov_shape == np.array([25, 97, 97])), CONFIG.model.input_fov_shape
     logging.debug("input_fov_shape: {}".format(CONFIG.model.input_fov_shape))
 
+    results = {}
+
     vol_name = list(volumes.keys())[0]
     volume = volumes[vol_name].downsample(CONFIG.volume.resolution)
     seeds, ids = seeds_from_skeleton(skeleton_file)
@@ -1148,6 +1150,7 @@ def fill_skeleton_with_model_threaded(
 
         logging.debug("Adding body to prediction label volume.")
 
+        results[tuple(node[2:])] = mask
         skel.fill(node[0], mask)
 
         logging.info("Filling {} succeeded".format(node[0]))
@@ -1161,28 +1164,8 @@ def fill_skeleton_with_model_threaded(
     pbar.close()
 
     if save_output_file:
-        skel.save_skeleton_mask_mesh(save_output_file)
-        skel.save_stats(save_output_file)
-
-    while save_output_file is None:
-        s = raw_input(
-            "Press Enter to continue, "
-            "r to 3D render body, "
-            "rs to 3D render body with seeds, "
-            "s to save masks for visualization elsewhere, "
-            "q to quit..."
-        )
-        if s == "q":
-            return
-        elif s == "rs":
-            skel.render_skeleton()
-        elif s == "r":
-            skel.render_large_skeleton()
-        elif s == "s":
-            s = raw_input("Please enter the desired file name:\n")
-            skel.save_skeleton_masks(s)
-        else:
-            break
+        import pickle
+        pickle.dump(results, open(save_output_file, "wb"))
 
 def evaluate_volume(
         volumes,
