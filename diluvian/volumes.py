@@ -1517,10 +1517,10 @@ class N5Volume(Volume):
         return np.floor_divide(a, self.scale)
 
     def real_coord_to_world(self, a):
-        return np.floor_divide(a - self.translation, self.orig_resolution)
+        return np.floor_divide(a + self.translation, self.resolution)
 
     def world_coord_to_real(self, a):
-        return np.multiply(a, self.orig_resolution) + self.translation
+        return np.multiply(a, self.resolution) - self.translation
 
     @property
     def octree_leaf_shape(self):
