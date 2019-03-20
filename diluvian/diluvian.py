@@ -1018,7 +1018,7 @@ def fill_skeleton_with_model_threaded(
        list(volume.world_coord_to_local(volume.real_coord_to_world(seed)))
        for seed in seeds
     ]
-    
+
     nodes = [np.array(ids[i] + seeds[i]) for i in range(len(seeds))]
     skel = sarbor.Skeleton()
     skel.input_nid_pid_x_y_z(original_nodes)
@@ -1178,7 +1178,15 @@ def fill_skeleton_with_model_threaded(
 
     if save_output_file:
         import pickle
-        pickle.dump(results, open(save_output_file + "_masks.obj", "wb"))
+        mask_file = save_output_file + "_masks.obj"
+        logging.info("saving results to {}".format(mask_file))
+        pickle.dump(results, open(mask_file, "wb"))
+    else:
+        import pickle
+        mask_file = "results/masks.obj"
+        logging.info("saving results to {}".format(mask_file))
+        pickle.dump(results, open(mask_file, "wb"))
+
 
 def evaluate_volume(
         volumes,
