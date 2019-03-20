@@ -1005,20 +1005,33 @@ def fill_skeleton_with_model_threaded(
     volume = volumes[vol_name].downsample(CONFIG.volume.resolution)
     seeds, ids = seeds_from_skeleton(skeleton_file)
     original_nodes = [ids[i] + seeds[i] for i in range(len(seeds))]
+    #N5Volume
+    """
     seeds = [
        list(volume.world_coord_to_local(volume.parent.real_coord_to_world(seed)))
        for seed in seeds
     ]
+    """
+    # Image Stack
+
+    seeds = [
+       list(volume.world_coord_to_local(volume.real_coord_to_world(seed)))
+       for seed in seeds
+    ]
+    
     nodes = [np.array(ids[i] + seeds[i]) for i in range(len(seeds))]
     skel = sarbor.Skeleton()
     skel.input_nid_pid_x_y_z(original_nodes)
     region_shape = CONFIG.model.input_fov_shape
     region_shape += 2 * (region_shape // 4)
 
+    # Only for N5Volume
+    """
     volume.parent.initialize_many(volume.parent.image_data, [
        list(volume.local_coord_to_world(seed))
        for seed in seeds
     ], region_shape * volume.scale)
+    """
 
 
     pbar = tqdm(desc="Node queue", total=len(nodes), miniters=1, smoothing=0.0)
