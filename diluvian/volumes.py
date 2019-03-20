@@ -1263,8 +1263,8 @@ class ImageStackVolume(Volume):
                     "tile_source_type",
                 ]
                 volume = ImageStackVolume.from_catmaid_stack(
-                    {si[key]: dataset[key] for key in si},
-                    {tsp[key]: dataset[key] for key in tsp},
+                    {key: dataset[key] for key in si},
+                    {key: dataset[key] for key in tsp},
                 )
                 volumes[dataset["title"]] = volume
 
