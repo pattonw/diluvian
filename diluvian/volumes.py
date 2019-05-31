@@ -427,7 +427,7 @@ class MissingDataAugmentGenerator(SubvolumeAugmentGenerator):
                              subv.label_id)
             slices = [slice(None), slice(None), slice(None)]
             slices[self.axis] = missing_sections
-            subv.image[slices] = 0
+            subv.image[tuple(slices)] = 0
             if self.remove_label:
                 label_axis_margin = (subv.image.shape[self.axis] - subv.label_mask.shape[self.axis]) // 2
                 label_sections = missing_sections[0] - label_axis_margin
@@ -536,13 +536,13 @@ class ContrastAugmentGenerator(SubvolumeAugmentGenerator):
                              subv.label_id)
             slices = [slice(None), slice(None), slice(None)]
             slices[self.axis] = sections
-            data = subv.image[slices]
+            data = subv.image[tuple(slices)]
             old_min = data.min()
             old_max = data.max()
             scaling = np.random.normal(self.scaling_mean, self.scaling_std)
             center = np.random.normal(self.center_mean, self.center_std)
             data = scaling*(data - old_min) + 0.5*scaling*center*(old_max - old_min) + old_min
-            subv.image[slices] = data
+            subv.image[tuple(slices)] = data
             return subv
         else:
             return None
@@ -612,8 +612,8 @@ class MaskedArtifactAugmentGenerator(SubvolumeAugmentGenerator):
                         continue
                     mask_found = True
                     art = self.artifacts.get_subvolume(art_bounds).image
-                raw = subv.image[slices]
-                subv.image[slices] = raw * (1.0 - mask) + art * mask
+                raw = subv.image[tuple(slices)]
+                subv.image[tuple(slices)] = raw * (1.0 - mask) + art * mask
             return subv
         else:
             return None

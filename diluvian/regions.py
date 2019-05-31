@@ -274,7 +274,7 @@ class Region(object):
         ctr = np.asarray(mask.shape) // 2
         neigh_min = ctr - self.MOVE_DELTA
         neigh_max = ctr + self.MOVE_DELTA + 1
-        neighborhood = mask[map(slice, neigh_min, neigh_max)]
+        neighborhood = mask[tuple(map(slice, neigh_min, neigh_max))]
         return np.nanmax(neighborhood) >= CONFIG.model.t_move
 
     def add_mask(self, mask_block, mask_pos):
@@ -285,7 +285,7 @@ class Region(object):
             assert self.block_padding is not None, \
                 'Position block extends out of region bounds, but padding is not enabled: {}'.format(mask_pos)
             end = [-x if x != 0 else None for x in pad_post]
-            mask_block = mask_block[list(map(slice, pad_pre, end))]
+            mask_block = mask_block[tuple(map(slice, pad_pre, end))]
         current_mask = self.mask[mask_min[0]:mask_max[0],
                                  mask_min[1]:mask_max[1],
                                  mask_min[2]:mask_max[2]]
@@ -384,7 +384,7 @@ class Region(object):
                                        block_min[1]:block_max[1],
                                        block_min[2]:block_max[2]]
             if np.any(pad_pre) or np.any(pad_post):
-                pad_width = zip(list(pad_pre), list(pad_post))
+                pad_width = list(zip(list(pad_pre), list(pad_post)))
                 target_block = np.pad(target_block, pad_width, self.block_padding)
         else:
             target_block = None
@@ -402,7 +402,7 @@ class Region(object):
         pred_bounds = [None, None]
         pred_bounds[0] = self.get_block_bounds(self.pos_to_vox(self.move_bounds[0]), CONFIG.model.output_fov_shape)[0]
         pred_bounds[1] = self.get_block_bounds(self.pos_to_vox(self.move_bounds[1]), CONFIG.model.output_fov_shape)[1]
-        pred = self.mask[list(map(slice, pred_bounds[0], pred_bounds[1]))].copy()
+        pred = self.mask[tuple(map(slice, pred_bounds[0], pred_bounds[1]))].copy()
         pred[np.isnan(pred)] = CONFIG.model.v_false
 
         targ_bounds = [None, None]
@@ -412,7 +412,7 @@ class Region(object):
         targ_bounds[1] = self.get_block_bounds(self.pos_to_vox(self.move_bounds[1]) - self.target_offset,
                                                CONFIG.model.output_fov_shape,
                                                self.target_offset)[1]
-        target = self.target[list(map(slice, targ_bounds[0], targ_bounds[1]))]
+        target = self.target[tuple(map(slice, targ_bounds[0], targ_bounds[1]))]
 
         if threshold:
             target = target >= CONFIG.model.t_final
@@ -429,13 +429,13 @@ class Region(object):
         new_mask_bin, bounds = body.get_seeded_component(CONFIG.postprocessing.closing_shape)
         new_mask_bin = new_mask_bin.astype(np.bool)
 
-        mask_block = self.mask[list(map(slice, bounds[0], bounds[1]))].copy()
+        mask_block = self.mask[tuple(map(slice, bounds[0], bounds[1]))].copy()
         # Clip any values not in the seeded connected component so that they
         # cannot not generate moves when rechecking.
         mask_block[~new_mask_bin] = np.clip(mask_block[~new_mask_bin], None, 0.9 * CONFIG.model.t_move)
 
         self.mask[:] = np.NAN
-        self.mask[list(map(slice, bounds[0], bounds[1]))] = mask_block
+        self.mask[tuple(map(slice, bounds[0], bounds[1]))] = mask_block
         return True
 
     class EarlyFillTermination(Exception):
