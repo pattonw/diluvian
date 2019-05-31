@@ -6,8 +6,13 @@ from __future__ import division
 import itertools
 import logging
 
-import matplotlib.animation as animation
-import matplotlib.pyplot as plt
+try:
+    import matplotlib.animation as animation
+    import matplotlib.pyplot as plt
+except ImportError as e:
+    logging.warning("Outputting animations will not be possible due to: {}".format(e))
+
+
 import numpy as np
 import six
 from six.moves import queue

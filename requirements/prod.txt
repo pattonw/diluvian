@@ -3,12 +3,12 @@ Keras==2.1.6
 matplotlib==2.0.0
 networkx==1.11
 neuroglancer==0.0.8
-numpy==1.14.3
+numpy==1.16.2
 Pillow==4.0.0
-pytoml==0.1.11
+pytoml==0.1.20
 requests==2.13.0
 scikit-image==0.13.0
-scipy==0.19.1
+scipy==1.2.1
 six==1.11.0
 tensorflow==1.8.0
 tqdm==4.19.1
